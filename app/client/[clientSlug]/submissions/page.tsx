@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { logoutClient } from "../actions";
 
 function getFileTypeLabel(mimeType: string) {
   if (mimeType === "application/pdf") return "PDF";
@@ -78,9 +79,11 @@ export default async function ClientSubmissionsPage({
           <p className="eyebrow">顧客画面</p>
           <h1>送信履歴</h1>
         </div>
-        <Link href="/" className="icon-button" aria-label="トップへ戻る">
-          <LogOut size={20} />
-        </Link>
+        <form action={logoutClient.bind(null, clientSlug)}>
+          <button className="icon-button" type="submit" aria-label="ログアウト">
+            <LogOut size={20} />
+          </button>
+        </form>
       </header>
 
       <nav className="mobile-tabs" aria-label="顧客メニュー">

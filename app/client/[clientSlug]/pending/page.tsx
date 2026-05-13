@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Clock3, LogOut } from "lucide-react";
+import { Clock3, RefreshCw } from "lucide-react";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,11 +32,11 @@ export default async function ClientPendingPage({
         <h1>承認待ちです</h1>
         <p>
           {account?.customer_name || "登録済みの顧客"} 様の利用申請を受け付けました。
-          管理者が承認すると、資料送信画面を利用できます。
+          管理者が承認すると、この顧客専用URLから資料送信画面を利用できます。
         </p>
-        <Link className="secondary-action" href="/">
-          <LogOut size={18} />
-          トップへ戻る
+        <Link className="secondary-action" href={`/client/${clientSlug}`}>
+          <RefreshCw size={18} />
+          承認状況を確認する
         </Link>
       </section>
     </main>

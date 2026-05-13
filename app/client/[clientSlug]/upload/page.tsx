@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Camera, CheckCircle2, History, LogOut } from "lucide-react";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { logoutClient } from "../actions";
 import { SubmissionForm } from "./submission-form";
 
 export default async function ClientUploadPage({
@@ -39,9 +40,11 @@ export default async function ClientUploadPage({
           <p className="eyebrow">顧客画面</p>
           <h1>証憑を送信</h1>
         </div>
-        <Link href="/" className="icon-button" aria-label="トップへ戻る">
-          <LogOut size={20} />
-        </Link>
+        <form action={logoutClient.bind(null, clientSlug)}>
+          <button className="icon-button" type="submit" aria-label="ログアウト">
+            <LogOut size={20} />
+          </button>
+        </form>
       </header>
 
       <nav className="mobile-tabs" aria-label="顧客メニュー">
