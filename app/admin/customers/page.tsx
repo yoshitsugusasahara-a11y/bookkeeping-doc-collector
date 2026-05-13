@@ -11,6 +11,7 @@ import {
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { approveCustomerAccount } from "./actions";
+import { CustomerUrlBuilder } from "./customer-url-builder";
 
 type CustomerRow = {
   id: string;
@@ -104,6 +105,7 @@ export default async function AdminCustomersPage() {
     (customer) => !customer.drive_folder_id,
   ).length;
   const submissionTotal = submissions.length;
+  const appBaseUrl = process.env.APP_BASE_URL || "https://bookkeeping-doc-collector.vercel.app";
 
   return (
     <main className="admin-shell">
@@ -142,6 +144,8 @@ export default async function AdminCustomersPage() {
             <input placeholder="顧客名・メールで検索" />
           </label>
         </header>
+
+        <CustomerUrlBuilder baseUrl={appBaseUrl} />
 
         <section className="metric-grid" aria-label="集計">
           <div className="metric">
