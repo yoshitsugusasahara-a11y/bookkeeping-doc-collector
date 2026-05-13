@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, FileImage, Send } from "lucide-react";
 import { createSubmission } from "./actions";
 
@@ -8,11 +8,55 @@ type SubmissionFormProps = {
   clientSlug: string;
 };
 
+function getFileTypeLabel(file: File) {
+  if (file.type === "application/pdf") return "PDF";
+  if (file.type.includes("heic") || file.type.includes("heif")) return "HEIC";
+  if (file.type.includes("png")) return "PNG";
+  if (file.type.includes("jpeg") || file.type.includes("jpg")) return "JPG";
+  return file.type || "ファイル";
+}
+
+function createThumbnailDataUrl(file: File, sourceUrl: string) {
+  return new Promise<string>((resolve) => {
+    if (!file.type.startsWith("image/")) {
+      resolve("");
+      return;
+    }
+
+    const image = new Image();
+    image.onload = () => {
+      try {
+        const maxSize = 320;
+        const ratio = Math.min(maxSize / image.width, maxSize / image.height, 1);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * ratio));
+        canvas.height = Math.max(1, Math.round(image.height * ratio));
+
+        const context = canvas.getContext("2d");
+        if (!context) {
+          resolve("");
+          return;
+        }
+
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.68));
+      } catch (error) {
+        console.warn("Failed to create thumbnail", error);
+        resolve("");
+      }
+    };
+    image.onerror = () => resolve("");
+    image.src = sourceUrl;
+  });
+}
+
 export function SubmissionForm({ clientSlug }: SubmissionFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
+  const previewUrlRef = useRef("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [thumbnailDataUrl, setThumbnailDataUrl] = useState("");
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [state, formAction, isPending] = useActionState(
     createSubmission.bind(null, clientSlug),
     { status: "idle" as const, message: "" },
@@ -21,56 +65,58 @@ export function SubmissionForm({ clientSlug }: SubmissionFormProps) {
   const selectedFileSize = selectedFile
     ? `${(selectedFile.size / 1024).toFixed(1)} KB`
     : "";
-  const selectedFileType = selectedFile?.type || "ファイル種別未取得";
-  const canPreviewImage =
-    selectedFile?.type.startsWith("image/") &&
-    !selectedFile.type.includes("heic") &&
-    !selectedFile.type.includes("heif");
+  const selectedFileType = selectedFile ? getFileTypeLabel(selectedFile) : "";
+  const isImageFile = useMemo(
+    () => Boolean(selectedFile?.type.startsWith("image/")),
+    [selectedFile],
+  );
+
+  const clearSelectedFile = () => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = "";
+    }
+    setSelectedFile(null);
+    setPreviewUrl("");
+    setThumbnailDataUrl("");
+    setPreviewFailed(false);
+  };
 
   useEffect(() => {
     if (state.status === "success") {
       formRef.current?.reset();
-      setSelectedFile(null);
-      setPreviewUrl("");
-      setThumbnailDataUrl("");
+      clearSelectedFile();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.status, state.message]);
 
   useEffect(() => {
-    if (!selectedFile || !canPreviewImage) {
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+    };
+  }, []);
+
+  const handleFileChange = async (file: File | null) => {
+    clearSelectedFile();
+    if (!file) return;
+
+    setSelectedFile(file);
+    if (!file.type.startsWith("image/")) return;
+
+    try {
+      const objectUrl = URL.createObjectURL(file);
+      previewUrlRef.current = objectUrl;
+      setPreviewUrl(objectUrl);
+      setThumbnailDataUrl(await createThumbnailDataUrl(file, objectUrl));
+    } catch (error) {
+      console.warn("Failed to prepare file preview", error);
+      setPreviewFailed(true);
       setPreviewUrl("");
       setThumbnailDataUrl("");
-      return;
     }
-
-    const objectUrl = URL.createObjectURL(selectedFile);
-    setPreviewUrl(objectUrl);
-
-    const image = new Image();
-    image.onload = () => {
-      const maxSize = 360;
-      const ratio = Math.min(maxSize / image.width, maxSize / image.height, 1);
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(image.width * ratio));
-      canvas.height = Math.max(1, Math.round(image.height * ratio));
-
-      const context = canvas.getContext("2d");
-      if (context) {
-        context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        setThumbnailDataUrl(canvas.toDataURL("image/jpeg", 0.72));
-      }
-
-      URL.revokeObjectURL(objectUrl);
-    };
-    image.onerror = () => {
-      setThumbnailDataUrl("");
-    };
-    image.src = objectUrl;
-
-    return () => {
-      URL.revokeObjectURL(objectUrl);
-    };
-  }, [canPreviewImage, selectedFile]);
+  };
 
   return (
     <form ref={formRef} className="upload-panel" action={formAction}>
@@ -85,21 +131,25 @@ export function SubmissionForm({ clientSlug }: SubmissionFormProps) {
         <input
           name="receiptFile"
           type="file"
-          accept="image/jpeg,image/png,image/heic,image/heif,application/pdf"
+          accept="image/*,application/pdf,.heic,.heif"
           required
           disabled={isPending}
           onChange={(event) => {
-            setSelectedFile(event.target.files?.[0] ?? null);
+            void handleFileChange(event.target.files?.[0] ?? null);
           }}
         />
         <span className="file-icon" aria-hidden="true">
           <FileImage size={32} />
         </span>
-        {previewUrl && (
+        {previewUrl && !previewFailed && (
           <img
             className="file-preview"
             src={previewUrl}
             alt="選択した画像のプレビュー"
+            onError={() => {
+              setPreviewFailed(true);
+              setThumbnailDataUrl("");
+            }}
           />
         )}
         {selectedFile ? (
@@ -108,6 +158,9 @@ export function SubmissionForm({ clientSlug }: SubmissionFormProps) {
             <small>
               {selectedFileType} / {selectedFileSize}
             </small>
+            {isImageFile && previewFailed && (
+              <small>この画像形式はプレビューできませんが、送信できます。</small>
+            )}
           </span>
         ) : (
           <>
