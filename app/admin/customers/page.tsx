@@ -117,7 +117,7 @@ export default async function AdminCustomersPage() {
         <nav className="side-nav" aria-label="管理メニュー">
           <a className="side-link active" href="#customers">
             <ShieldCheck size={18} />
-            <span>顧客管理</span>
+            <span>?? / ??URL</span>
           </a>
           <a className="side-link" href="#submissions">
             <Inbox size={18} />
@@ -196,6 +196,10 @@ export default async function AdminCustomersPage() {
                   <small>
                     {emailByUserId.get(customer.user_id) || "メール未取得"}
                   </small>
+                  <CustomerUrlTools
+                    baseUrl={appBaseUrl}
+                    clientSlug={customer.client_slug}
+                  />
                 </div>
                 <span
                   className={isApproved ? "pill approved" : "pill pending"}
