@@ -19,6 +19,20 @@ const allowedMimeTypes = new Set([
   "application/pdf",
 ]);
 
+function inferMimeType(file: File) {
+  if (file.type) return file.type.toLowerCase();
+
+  const fileName = file.name.toLowerCase();
+  if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+  if (fileName.endsWith(".png")) return "image/png";
+  if (fileName.endsWith(".heic")) return "image/heic";
+  if (fileName.endsWith(".heif")) return "image/heif";
+  if (fileName.endsWith(".pdf")) return "application/pdf";
+  return "application/octet-stream";
+}
+
 export async function createSubmission(
   clientSlug: string,
   _prevState: UploadState,
@@ -36,7 +50,9 @@ export async function createSubmission(
     return { status: "error", message: "画像またはPDFを選択してください。" };
   }
 
-  if (!allowedMimeTypes.has(fileValue.type)) {
+  const mimeType = inferMimeType(fileValue);
+
+  if (!allowedMimeTypes.has(mimeType)) {
     return {
       status: "error",
       message: "JPG、PNG、HEIC、PDFのいずれかを選択してください。",
@@ -91,7 +107,7 @@ export async function createSubmission(
     uploaded_by_user_id: user.id,
     transaction_note: transactionNote,
     file_name: fileValue.name || "uploaded-file",
-    mime_type: fileValue.type || "application/octet-stream",
+    mime_type: mimeType,
     file_size: fileValue.size,
     drive_file_id: driveFileId,
     drive_view_url: driveViewUrl,
