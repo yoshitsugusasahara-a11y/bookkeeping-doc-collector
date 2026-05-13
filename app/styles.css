@@ -104,6 +104,10 @@ h2 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.link-grid.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .nav-card {
   align-items: flex-start;
   background: var(--panel);
@@ -565,6 +569,36 @@ textarea {
 
 .customer-cell small {
   color: var(--muted);
+}
+
+.customer-url-line {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.customer-url-line span {
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.customer-url-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.icon-button.compact {
+  height: 30px;
+  width: 30px;
+}
+
+.copy-status {
+  color: var(--green);
+  font-weight: 800;
 }
 
 .pill {

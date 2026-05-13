@@ -1,26 +1,5 @@
 import Link from "next/link";
-import { Building2, ShieldCheck, UploadCloud } from "lucide-react";
-
-const links = [
-  {
-    href: "/client/tokyo-shokai",
-    title: "顧客ログイン",
-    description: "顧客専用URLからGoogleログインして資料を送信します",
-    icon: UploadCloud,
-  },
-  {
-    href: "/client/tokyo-shokai/submissions",
-    title: "顧客送信履歴",
-    description: "送信済みの画像と取引内容を確認するサンプル画面",
-    icon: Building2,
-  },
-  {
-    href: "/admin/login",
-    title: "管理者ログイン",
-    description: "Googleログイン後に顧客承認と送信履歴を管理します",
-    icon: ShieldCheck,
-  },
-];
+import { Link as LinkIcon, ShieldCheck } from "lucide-react";
 
 export default function Home() {
   return (
@@ -29,26 +8,30 @@ export default function Home() {
         <p className="eyebrow">Prototype</p>
         <h1>記帳資料回収</h1>
         <p>
-          Vercel、Supabase、Google Driveで運用する前提の画面プロトタイプです。
-          Googleログインの入口を追加し、顧客画面と管理者画面の流れを確認できます。
+          顧客ごとの専用URLから、Googleログインで証憑を送信するためのアプリです。
+          顧客用URLは管理画面から作成・確認します。
         </p>
       </section>
 
-      <section className="link-grid" aria-label="画面一覧">
-        {links.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link href={item.href} className="nav-card" key={item.href}>
-              <span className="icon-box" aria-hidden="true">
-                <Icon size={22} />
-              </span>
-              <span>
-                <strong>{item.title}</strong>
-                <small>{item.description}</small>
-              </span>
-            </Link>
-          );
-        })}
+      <section className="link-grid compact" aria-label="主要メニュー">
+        <Link href="/admin/login" className="nav-card">
+          <span className="icon-box" aria-hidden="true">
+            <ShieldCheck size={22} />
+          </span>
+          <span>
+            <strong>管理者ログイン</strong>
+            <small>顧客の承認、専用URLの確認、Drive保存先、送信履歴を管理します</small>
+          </span>
+        </Link>
+        <Link href="/admin/customers" className="nav-card">
+          <span className="icon-box" aria-hidden="true">
+            <LinkIcon size={22} />
+          </span>
+          <span>
+            <strong>顧客専用URLを確認</strong>
+            <small>顧客ごとのログインURLを作成し、登録済み顧客のURLをコピーできます</small>
+          </span>
+        </Link>
       </section>
     </main>
   );

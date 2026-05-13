@@ -11,7 +11,7 @@ import {
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { approveCustomerAccount } from "./actions";
-import { CustomerUrlBuilder } from "./customer-url-builder";
+import { CustomerUrlBuilder, CustomerUrlTools } from "./customer-url-builder";
 
 type CustomerRow = {
   id: string;

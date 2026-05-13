@@ -7,8 +7,17 @@ type CustomerUrlBuilderProps = {
   baseUrl: string;
 };
 
+type CustomerUrlToolsProps = {
+  baseUrl: string;
+  clientSlug: string;
+};
+
 function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.replace(/\/$/, "");
+}
+
+function makeClientUrl(baseUrl: string, clientSlug: string) {
+  return normalizeBaseUrl(baseUrl) + "/client/" + clientSlug;
 }
 
 function makeSlug(value: string) {
@@ -21,6 +30,31 @@ function makeSlug(value: string) {
     .slice(0, 60);
 }
 
+export function CustomerUrlTools({ baseUrl, clientSlug }: CustomerUrlToolsProps) {
+  const [copied, setCopied] = useState(false);
+  const clientUrl = makeClientUrl(baseUrl, clientSlug);
+
+  const copyUrl = async () => {
+    await navigator.clipboard.writeText(clientUrl);
+    setCopied(true);
+  };
+
+  return (
+    <div className="customer-url-line">
+      <span>{clientUrl}</span>
+      <div className="customer-url-actions">
+        <button className="icon-button compact" type="button" onClick={copyUrl} aria-label="顧客URLをコピー">
+          <Clipboard size={15} />
+        </button>
+        <a className="icon-button compact" href={clientUrl} target="_blank" rel="noreferrer" aria-label="顧客URLを開く">
+          <ExternalLink size={15} />
+        </a>
+      </div>
+      {copied && <small className="copy-status">コピー済み</small>}
+    </div>
+  );
+}
+
 export function CustomerUrlBuilder({ baseUrl }: CustomerUrlBuilderProps) {
   const [customerName, setCustomerName] = useState("");
   const [manualSlug, setManualSlug] = useState("");
@@ -28,7 +62,7 @@ export function CustomerUrlBuilder({ baseUrl }: CustomerUrlBuilderProps) {
 
   const suggestedSlug = useMemo(() => makeSlug(customerName), [customerName]);
   const slug = manualSlug || suggestedSlug;
-  const clientUrl = slug ? normalizeBaseUrl(baseUrl) + "/client/" + slug : "";
+  const clientUrl = slug ? makeClientUrl(baseUrl, slug) : "";
 
   const handleSlugChange = (value: string) => {
     setManualSlug(makeSlug(value));
