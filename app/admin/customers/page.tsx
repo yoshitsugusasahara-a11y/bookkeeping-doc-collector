@@ -3,14 +3,12 @@ import {
   AlertTriangle,
   Check,
   ExternalLink,
-  FolderOpen,
-  Inbox,
   Search,
   ShieldCheck,
 } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { approveCustomerAccount } from "./actions";
+import { approveCustomerAccount, logoutAdmin } from "./actions";
 import { CustomerUrlBuilder, CustomerUrlTools } from "./customer-url-builder";
 
 type CustomerRow = {
@@ -105,7 +103,8 @@ export default async function AdminCustomersPage() {
     (customer) => !customer.drive_folder_id,
   ).length;
   const submissionTotal = submissions.length;
-  const appBaseUrl = process.env.APP_BASE_URL || "https://bookkeeping-doc-collector.vercel.app";
+  const appBaseUrl =
+    process.env.APP_BASE_URL || "https://bookkeeping-doc-collector.vercel.app";
 
   return (
     <main className="admin-shell">
@@ -114,23 +113,15 @@ export default async function AdminCustomersPage() {
           <p className="eyebrow">管理者</p>
           <h1>資料回収管理</h1>
         </div>
-        <nav className="side-nav" aria-label="管理メニュー">
-          <a className="side-link active" href="#customers">
-            <ShieldCheck size={18} />
-            <span>?? / ??URL</span>
-          </a>
-          <a className="side-link" href="#submissions">
-            <Inbox size={18} />
-            <span>送信履歴</span>
-          </a>
-          <a className="side-link" href="#drive">
-            <FolderOpen size={18} />
-            <span>Drive連携</span>
-          </a>
-        </nav>
-        <Link href="/admin/login" className="secondary-action">
-          ログインへ戻る
-        </Link>
+        <div className="sidebar-summary">
+          <strong>顧客管理</strong>
+          <span>顧客URLの発行、承認、Drive設定、送信履歴をこの画面で管理します。</span>
+        </div>
+        <form action={logoutAdmin}>
+          <button className="secondary-action sidebar-action" type="submit">
+            ログアウト
+          </button>
+        </form>
       </aside>
 
       <section className="admin-content">
@@ -173,7 +164,7 @@ export default async function AdminCustomersPage() {
 
         <section className="customer-table" id="customers">
           <div className="table-head">
-            <span>顧客</span>
+            <span>顧客 / 専用URL</span>
             <span>状態</span>
             <span>Drive</span>
             <span>送信数</span>
@@ -206,7 +197,9 @@ export default async function AdminCustomersPage() {
                 >
                   {statusLabel}
                 </span>
-                <span className={customer.drive_folder_id ? "muted" : "warning-text"}>
+                <span
+                  className={customer.drive_folder_id ? "muted" : "warning-text"}
+                >
                   {driveLabel}
                 </span>
                 <strong>

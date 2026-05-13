@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 export async function approveCustomerAccount(formData: FormData) {
@@ -21,4 +22,10 @@ export async function approveCustomerAccount(formData: FormData) {
     .eq("id", accountId);
 
   revalidatePath("/admin/customers");
+}
+
+export async function logoutAdmin() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/admin/login");
 }
