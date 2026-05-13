@@ -8,6 +8,10 @@
   --green: #237653;
   --blue: #315f9c;
   --soft-blue: #e9f1fb;
+  --admin-blue: #2563a8;
+  --admin-soft-blue: #eaf2ff;
+  --admin-navy: #10243d;
+  --admin-sidebar-text: #dbeafe;
   --yellow: #7a5a16;
   --soft-yellow: #fbf2d8;
   --shadow: 0 18px 45px rgba(28, 38, 32, 0.1);
@@ -424,13 +428,16 @@ textarea {
 }
 
 .admin-shell {
+  --green: var(--admin-blue);
+  --soft-green: var(--admin-soft-blue);
+  --shadow: 0 18px 45px rgba(22, 56, 100, 0.11);
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   min-height: 100vh;
 }
 
 .sidebar {
-  background: #16261e;
+  background: var(--admin-navy);
   color: #fff;
   display: flex;
   flex-direction: column;
@@ -440,7 +447,7 @@ textarea {
 }
 
 .sidebar .eyebrow {
-  color: #95d8b5;
+  color: #93c5fd;
 }
 
 .sidebar h1 {
@@ -472,7 +479,7 @@ textarea {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
-  color: #d7e6dc;
+  color: var(--admin-sidebar-text);
   display: grid;
   gap: 8px;
   line-height: 1.7;
@@ -492,6 +499,9 @@ textarea {
 }
 
 .admin-detail-shell {
+  --green: var(--admin-blue);
+  --soft-green: var(--admin-soft-blue);
+  --shadow: 0 18px 45px rgba(22, 56, 100, 0.11);
   margin: 0 auto;
   max-width: 980px;
   min-height: 100vh;
@@ -571,7 +581,7 @@ textarea {
 }
 
 .table-head {
-  background: #eef4f0;
+  background: #edf5ff;
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 800;
@@ -659,7 +669,9 @@ textarea {
 }
 
 .auth-shell.admin-auth {
-  background: #eef4f0;
+  --green: var(--admin-blue);
+  --soft-green: var(--admin-soft-blue);
+  background: #edf5ff;
 }
 
 .auth-panel {
