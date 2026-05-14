@@ -25,3 +25,21 @@ export async function updateCustomerDriveSettings(formData: FormData) {
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
 }
+
+export async function disconnectMoneyForward(formData: FormData) {
+  const customerId = String(formData.get("customerId") || "");
+
+  if (!customerId) {
+    return;
+  }
+
+  const supabase = await createClient();
+
+  await supabase
+    .from("mf_connections")
+    .delete()
+    .eq("customer_account_id", customerId);
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath("/admin/customers");
+}

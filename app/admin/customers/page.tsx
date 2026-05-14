@@ -22,6 +22,20 @@ type CustomerRow = {
   created_at: string;
 };
 
+type MfConnectionRow = {
+  customer_account_id: string;
+  connected_at: string;
+  expires_at: string | null;
+};
+
+function formatAdminDateTime(value?: string | null) {
+  if (!value) return "未連携";
+  return new Intl.DateTimeFormat("ja-JP", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 export default async function AdminCustomersPage() {
   const supabase = await createClient();
   const user = await getCurrentUserOrRedirect(supabase, "/admin/login");
@@ -84,8 +98,23 @@ export default async function AdminCustomersPage() {
     : { data: [] };
   const submissions = submissionRows ?? [];
 
+  const { data: mfConnectionRows } = accountIds.length
+    ? await supabase
+        .from("mf_connections")
+        .select("customer_account_id, connected_at, expires_at")
+        .in("customer_account_id", accountIds)
+        .returns<MfConnectionRow[]>()
+    : { data: [] };
+  const mfConnections = mfConnectionRows ?? [];
+
   const emailByUserId = new Map(
     profiles.map((profile) => [profile.id, profile.email]),
+  );
+  const mfConnectionByAccountId = new Map(
+    mfConnections.map((connection) => [
+      connection.customer_account_id,
+      connection,
+    ]),
   );
   const submissionCountByAccountId = submissions.reduce(
     (counts, submission) => {
@@ -101,6 +130,9 @@ export default async function AdminCustomersPage() {
   ).length;
   const driveMissingCount = customers.filter(
     (customer) => !customer.drive_folder_id,
+  ).length;
+  const mfMissingCount = customers.filter(
+    (customer) => !mfConnectionByAccountId.has(customer.id),
   ).length;
   const submissionTotal = submissions.length;
   const appBaseUrl =
@@ -148,8 +180,8 @@ export default async function AdminCustomersPage() {
             <strong>{submissionTotal}</strong>
           </div>
           <div className="metric">
-            <small>Drive未設定</small>
-            <strong>{driveMissingCount}</strong>
+            <small>MF未連携</small>
+            <strong>{mfMissingCount}</strong>
           </div>
         </section>
 
@@ -166,6 +198,7 @@ export default async function AdminCustomersPage() {
           <div className="table-head">
             <span>顧客 / 専用URL</span>
             <span>状態</span>
+            <span>MF連携</span>
             <span>Drive</span>
             <span>送信数</span>
             <span>操作</span>
@@ -179,6 +212,7 @@ export default async function AdminCustomersPage() {
             const driveLabel = customer.drive_folder_id
               ? customer.drive_folder_name || "Drive設定済み"
               : "未設定";
+            const mfConnection = mfConnectionByAccountId.get(customer.id);
 
             return (
               <article className="table-row" key={customer.id}>
@@ -196,6 +230,12 @@ export default async function AdminCustomersPage() {
                   className={isApproved ? "pill approved" : "pill pending"}
                 >
                   {statusLabel}
+                </span>
+                <span
+                  className={mfConnection ? "mf-status connected" : "mf-status missing"}
+                >
+                  <strong>{mfConnection ? "連携済み" : "未連携"}</strong>
+                  <small>{formatAdminDateTime(mfConnection?.connected_at)}</small>
                 </span>
                 <span
                   className={customer.drive_folder_id ? "muted" : "warning-text"}

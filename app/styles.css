@@ -364,6 +364,20 @@ textarea {
   color: #fff;
 }
 
+.danger-action {
+  align-items: center;
+  background: #fff4f2;
+  border: 1px solid #f0b8ae;
+  border-radius: 8px;
+  color: #b03a2e;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 8px;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 18px;
+}
+
 .secondary-action {
   background: #edf3ef;
   color: var(--ink);
@@ -619,7 +633,7 @@ textarea {
   align-items: center;
   display: grid;
   gap: 14px;
-  grid-template-columns: 2fr 110px 130px 90px 120px;
+  grid-template-columns: 2fr 110px 120px 130px 90px 120px;
   padding: 14px 16px;
 }
 
@@ -671,6 +685,29 @@ textarea {
 .copy-status {
   color: var(--green);
   font-weight: 800;
+}
+
+.mf-status {
+  display: grid;
+  gap: 4px;
+}
+
+.mf-status strong,
+.mf-status small {
+  display: block;
+}
+
+.mf-status small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.mf-status.connected strong {
+  color: var(--green);
+}
+
+.mf-status.missing strong {
+  color: var(--yellow);
 }
 
 .pill {

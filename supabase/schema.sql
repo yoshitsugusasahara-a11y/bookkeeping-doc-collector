@@ -158,7 +158,7 @@ grant select, insert, update on public.profiles to authenticated;
 grant select, insert, update on public.customer_accounts to authenticated;
 grant select on public.admin_users to authenticated;
 grant select, insert on public.submissions to authenticated;
-grant select, insert, update on public.mf_connections to authenticated;
+grant select, insert, update, delete on public.mf_connections to authenticated;
 
 create or replace function public.is_admin()
 returns boolean
@@ -289,3 +289,9 @@ with check (
       and ca.approval_status = 'approved'
   )
 );
+
+drop policy if exists "mf_connections_delete_own_or_admin" on public.mf_connections;
+create policy "mf_connections_delete_own_or_admin"
+on public.mf_connections for delete
+to authenticated
+using (user_id = auth.uid() or public.is_admin());

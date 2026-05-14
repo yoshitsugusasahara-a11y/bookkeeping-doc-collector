@@ -5,11 +5,12 @@ import {
   ExternalLink,
   FileText,
   ImageIcon,
+  Link2Off,
   ShieldCheck,
 } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { updateCustomerDriveSettings } from "./actions";
+import { disconnectMoneyForward, updateCustomerDriveSettings } from "./actions";
 
 function getFileTypeLabel(mimeType: string) {
   if (mimeType === "application/pdf") return "PDF";
@@ -45,6 +46,14 @@ function formatAmount(value?: number | null) {
     currency: "JPY",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function formatAdminDateTime(value?: string | null) {
+  if (!value) return "未取得";
+  return new Intl.DateTimeFormat("ja-JP", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 export default async function AdminCustomerDetailPage({
@@ -121,6 +130,12 @@ export default async function AdminCustomerDetailPage({
     .order("submitted_at", { ascending: false });
   const submissions = submissionRows ?? [];
 
+  const { data: mfConnection } = await supabase
+    .from("mf_connections")
+    .select("connected_at, expires_at, scope")
+    .eq("customer_account_id", customer.id)
+    .maybeSingle();
+
   return (
     <main className="admin-detail-shell">
       <header className="detail-header">
@@ -147,8 +162,8 @@ export default async function AdminCustomerDetailPage({
           <strong>{submissions.length}</strong>
         </div>
         <div className="metric">
-          <small>Drive</small>
-          <strong>{customer.drive_folder_name || "未設定"}</strong>
+          <small>MF連携</small>
+          <strong>{mfConnection ? "連携済み" : "未連携"}</strong>
         </div>
       </section>
 
@@ -160,6 +175,46 @@ export default async function AdminCustomerDetailPage({
           </span>
         </section>
       )}
+
+      <section className="settings-panel" aria-label="マネーフォワード連携">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Money Forward</p>
+            <h2>マネーフォワード連携</h2>
+          </div>
+          <span className={mfConnection ? "pill approved" : "pill pending"}>
+            {mfConnection ? "連携済み" : "未連携"}
+          </span>
+        </div>
+        {mfConnection ? (
+          <>
+            <dl className="connection-details">
+              <div>
+                <dt>連携日時</dt>
+                <dd>{formatAdminDateTime(mfConnection.connected_at)}</dd>
+              </div>
+              <div>
+                <dt>有効期限</dt>
+                <dd>{formatAdminDateTime(mfConnection.expires_at)}</dd>
+              </div>
+            </dl>
+            <form action={disconnectMoneyForward}>
+              <input type="hidden" name="customerId" value={customer.id} />
+              <button className="danger-action" type="submit">
+                <Link2Off size={18} />
+                MF連携を解除
+              </button>
+            </form>
+            <p className="muted">
+              解除すると、このアプリから当該顧客のMFへ送信できなくなります。MF側の連携中アプリ一覧でも、必要に応じて連携解除してください。
+            </p>
+          </>
+        ) : (
+          <p className="muted">
+            まだ顧客側でマネーフォワード連携が完了していません。
+          </p>
+        )}
+      </section>
 
       <section className="settings-panel" aria-label="Google Drive保存先">
         <div>
