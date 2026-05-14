@@ -20,7 +20,21 @@ export type ReceiptOcrOutcome =
       error: string;
     };
 
-const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const defaultGeminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const fallbackGeminiModels = (
+  process.env.GEMINI_FALLBACK_MODELS || "gemini-2.5-flash-lite"
+)
+  .split(",")
+  .map((model) => model.trim())
+  .filter(Boolean);
+
+function getGeminiModels() {
+  return Array.from(new Set([defaultGeminiModel, ...fallbackGeminiModels]));
+}
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   return Buffer.from(buffer).toString("base64");
@@ -84,10 +98,19 @@ export async function analyzeReceiptWithGemini({
     };
   }
 
-  try {
-    const base64Data = arrayBufferToBase64(await file.arrayBuffer());
+  const base64Data = arrayBufferToBase64(await file.arrayBuffer());
+  let lastError = "Gemini OCR failed.";
+  let lastResponse: unknown = null;
+
+  for (const model of getGeminiModels()) {
+    for (const retryDelay of [0, 900]) {
+      if (retryDelay > 0) {
+        await wait(retryDelay);
+      }
+
+      try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: {
@@ -128,15 +151,12 @@ export async function analyzeReceiptWithGemini({
 
     const payload = await response.json();
     if (!response.ok) {
-      return {
-        status: "failed",
-        result: null,
-        rawResponse: payload,
-        error:
+      lastResponse = payload;
+      lastError =
           typeof payload?.error?.message === "string"
             ? payload.error.message
-            : "Gemini OCR request failed.",
-      };
+            : "Gemini OCR request failed.";
+      continue;
     }
 
     const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -157,11 +177,16 @@ export async function analyzeReceiptWithGemini({
       error: null,
     };
   } catch (error) {
-    return {
-      status: "failed",
-      result: null,
-      rawResponse: null,
-      error: error instanceof Error ? error.message : "Gemini OCR failed.",
-    };
+        lastResponse = null;
+        lastError = error instanceof Error ? error.message : "Gemini OCR failed.";
+      }
+    }
+  }
+
+  return {
+    status: "failed",
+    result: null,
+    rawResponse: lastResponse,
+    error: lastError,
   }
 }
