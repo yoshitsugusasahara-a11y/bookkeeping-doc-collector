@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Camera, CheckCircle2, History, LogOut } from "lucide-react";
+import { Camera, CheckCircle2, History, LogOut, Settings } from "lucide-react";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { logoutClient } from "../actions";
@@ -47,7 +47,7 @@ export default async function ClientUploadPage({
         </form>
       </header>
 
-      <nav className="mobile-tabs" aria-label="顧客メニュー">
+      <nav className="mobile-tabs three-tabs" aria-label="顧客メニュー">
         <Link className="tab active" href={`/client/${clientSlug}/upload`}>
           <Camera size={18} />
           <span>送信</span>
@@ -55,6 +55,10 @@ export default async function ClientUploadPage({
         <Link className="tab" href={`/client/${clientSlug}/submissions`}>
           <History size={18} />
           <span>履歴</span>
+        </Link>
+        <Link className="tab" href={`/client/${clientSlug}/settings`}>
+          <Settings size={18} />
+          <span>設定</span>
         </Link>
       </nav>
 

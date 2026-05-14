@@ -97,6 +97,19 @@ alter table public.submissions
   add column if not exists mf_voucher_file_id text,
   add column if not exists mf_sent_at timestamptz;
 
+create table if not exists public.mf_connections (
+  id uuid primary key default gen_random_uuid(),
+  customer_account_id uuid not null unique references public.customer_accounts(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  access_token text not null,
+  refresh_token text,
+  token_type text,
+  scope text,
+  expires_at timestamptz,
+  connected_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists customer_accounts_user_id_idx
   on public.customer_accounts(user_id);
 
@@ -105,6 +118,9 @@ create index if not exists submissions_customer_account_id_idx
 
 create index if not exists submissions_submitted_at_idx
   on public.submissions(submitted_at desc);
+
+create index if not exists mf_connections_user_id_idx
+  on public.mf_connections(user_id);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -126,16 +142,23 @@ create trigger customer_accounts_set_updated_at
 before update on public.customer_accounts
 for each row execute function public.set_updated_at();
 
+drop trigger if exists mf_connections_set_updated_at on public.mf_connections;
+create trigger mf_connections_set_updated_at
+before update on public.mf_connections
+for each row execute function public.set_updated_at();
+
 alter table public.profiles enable row level security;
 alter table public.customer_accounts enable row level security;
 alter table public.admin_users enable row level security;
 alter table public.submissions enable row level security;
+alter table public.mf_connections enable row level security;
 
 grant usage on schema public to authenticated;
 grant select, insert, update on public.profiles to authenticated;
 grant select, insert, update on public.customer_accounts to authenticated;
 grant select on public.admin_users to authenticated;
 grant select, insert on public.submissions to authenticated;
+grant select, insert, update on public.mf_connections to authenticated;
 
 create or replace function public.is_admin()
 returns boolean
@@ -221,6 +244,43 @@ on public.submissions for insert
 to authenticated
 with check (
   uploaded_by_user_id = auth.uid()
+  and exists (
+    select 1
+    from public.customer_accounts ca
+    where ca.id = customer_account_id
+      and ca.user_id = auth.uid()
+      and ca.approval_status = 'approved'
+  )
+);
+
+drop policy if exists "mf_connections_select_own_or_admin" on public.mf_connections;
+create policy "mf_connections_select_own_or_admin"
+on public.mf_connections for select
+to authenticated
+using (user_id = auth.uid() or public.is_admin());
+
+drop policy if exists "mf_connections_insert_own_approved_customer" on public.mf_connections;
+create policy "mf_connections_insert_own_approved_customer"
+on public.mf_connections for insert
+to authenticated
+with check (
+  user_id = auth.uid()
+  and exists (
+    select 1
+    from public.customer_accounts ca
+    where ca.id = customer_account_id
+      and ca.user_id = auth.uid()
+      and ca.approval_status = 'approved'
+  )
+);
+
+drop policy if exists "mf_connections_update_own_approved_customer" on public.mf_connections;
+create policy "mf_connections_update_own_approved_customer"
+on public.mf_connections for update
+to authenticated
+using (user_id = auth.uid())
+with check (
+  user_id = auth.uid()
   and exists (
     select 1
     from public.customer_accounts ca

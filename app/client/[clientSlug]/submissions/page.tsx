@@ -8,6 +8,7 @@ import {
   History,
   ImageIcon,
   LogOut,
+  Settings,
 } from "lucide-react";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -102,7 +103,7 @@ export default async function ClientSubmissionsPage({
         </form>
       </header>
 
-      <nav className="mobile-tabs" aria-label="顧客メニュー">
+      <nav className="mobile-tabs three-tabs" aria-label="顧客メニュー">
         <Link className="tab" href={`/client/${clientSlug}/upload`}>
           <Camera size={18} />
           <span>送信</span>
@@ -110,6 +111,10 @@ export default async function ClientSubmissionsPage({
         <Link className="tab active" href={`/client/${clientSlug}/submissions`}>
           <History size={18} />
           <span>履歴</span>
+        </Link>
+        <Link className="tab" href={`/client/${clientSlug}/settings`}>
+          <Settings size={18} />
+          <span>設定</span>
         </Link>
       </nav>
 
