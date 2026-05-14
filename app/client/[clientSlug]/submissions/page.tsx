@@ -33,6 +33,22 @@ function formatSubmittedAt(value: string) {
   }).format(new Date(value));
 }
 
+function getOcrStatusLabel(status?: string | null) {
+  if (status === "completed") return "OCR解析済み";
+  if (status === "failed") return "OCR失敗";
+  if (status === "skipped") return "OCR未設定";
+  return "OCR待ち";
+}
+
+function formatAmount(value?: number | null) {
+  if (typeof value !== "number") return "未取得";
+  return new Intl.NumberFormat("ja-JP", {
+    style: "currency",
+    currency: "JPY",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 export default async function ClientSubmissionsPage({
   params,
   searchParams,
@@ -66,7 +82,7 @@ export default async function ClientSubmissionsPage({
   const { data: submissionRows } = await supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card",
     )
     .eq("customer_account_id", account.id)
     .order("submitted_at", { ascending: false });
@@ -145,6 +161,41 @@ export default async function ClientSubmissionsPage({
                     <ExternalLink size={15} />
                     Driveで開く
                   </a>
+                )}
+                <dl className="ocr-summary">
+                  <div>
+                    <dt>状態</dt>
+                    <dd>{getOcrStatusLabel(item.ocr_status)}</dd>
+                  </div>
+                  <div>
+                    <dt>取引日</dt>
+                    <dd>{item.ocr_date || "未取得"}</dd>
+                  </div>
+                  <div>
+                    <dt>金額</dt>
+                    <dd>{formatAmount(item.ocr_amount)}</dd>
+                  </div>
+                  <div>
+                    <dt>店舗名</dt>
+                    <dd>{item.ocr_store || "未取得"}</dd>
+                  </div>
+                  <div>
+                    <dt>概要</dt>
+                    <dd>{item.ocr_summary || "未取得"}</dd>
+                  </div>
+                  <div>
+                    <dt>支払方法</dt>
+                    <dd>
+                      {item.ocr_is_credit_card === null
+                        ? "未取得"
+                        : item.ocr_is_credit_card
+                          ? "クレカ等"
+                          : "現金"}
+                    </dd>
+                  </div>
+                </dl>
+                {item.ocr_error && (
+                  <small className="warning-text">OCR: {item.ocr_error}</small>
                 )}
               </div>
             </article>

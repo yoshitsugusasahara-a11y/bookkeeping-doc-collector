@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
+import { analyzeReceiptWithGemini } from "@/lib/gemini/receipt-ocr";
 import { isGoogleDriveConfigured, uploadFileToDrive } from "@/lib/google/drive";
 import { createClient } from "@/lib/supabase/server";
 
@@ -82,6 +83,11 @@ export async function createSubmission(
 
   let driveFileId: string | null = null;
   let driveViewUrl: string | null = null;
+  const ocr = await analyzeReceiptWithGemini({
+    file: fileValue,
+    mimeType,
+    transactionNote,
+  });
 
   if (account.drive_folder_id && isGoogleDriveConfigured()) {
     try {
@@ -111,6 +117,16 @@ export async function createSubmission(
     file_size: fileValue.size,
     drive_file_id: driveFileId,
     drive_view_url: driveViewUrl,
+    ocr_status: ocr.status,
+    ocr_error: ocr.error,
+    ocr_raw_response: ocr.rawResponse,
+    ocr_processed_at: ocr.status === "completed" ? new Date().toISOString() : null,
+    ocr_date: ocr.status === "completed" ? ocr.result.date : null,
+    ocr_amount: ocr.status === "completed" ? ocr.result.amount : null,
+    ocr_store: ocr.status === "completed" ? ocr.result.store : null,
+    ocr_summary: ocr.status === "completed" ? ocr.result.summary : null,
+    ocr_is_credit_card:
+      ocr.status === "completed" ? ocr.result.is_credit_card : null,
     thumbnail_url:
       thumbnailDataUrl.startsWith("data:image/") &&
       thumbnailDataUrl.length < 700_000

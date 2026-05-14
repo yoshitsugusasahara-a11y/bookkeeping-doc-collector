@@ -12,6 +12,18 @@ exception
   when duplicate_object then null;
 end $$;
 
+do $$ begin
+  create type public.ocr_status as enum ('pending', 'completed', 'failed', 'skipped');
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.mf_submission_status as enum ('not_ready', 'not_sent', 'sent', 'failed');
+exception
+  when duplicate_object then null;
+end $$;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
@@ -52,8 +64,38 @@ create table if not exists public.submissions (
   drive_file_id text,
   drive_view_url text,
   thumbnail_url text,
+  ocr_status public.ocr_status not null default 'pending',
+  ocr_error text,
+  ocr_raw_response jsonb,
+  ocr_processed_at timestamptz,
+  ocr_date date,
+  ocr_amount integer,
+  ocr_store text,
+  ocr_summary text,
+  ocr_is_credit_card boolean,
+  mf_status public.mf_submission_status not null default 'not_ready',
+  mf_error text,
+  mf_journal_id text,
+  mf_voucher_file_id text,
+  mf_sent_at timestamptz,
   submitted_at timestamptz not null default now()
 );
+
+alter table public.submissions
+  add column if not exists ocr_status public.ocr_status not null default 'pending',
+  add column if not exists ocr_error text,
+  add column if not exists ocr_raw_response jsonb,
+  add column if not exists ocr_processed_at timestamptz,
+  add column if not exists ocr_date date,
+  add column if not exists ocr_amount integer,
+  add column if not exists ocr_store text,
+  add column if not exists ocr_summary text,
+  add column if not exists ocr_is_credit_card boolean,
+  add column if not exists mf_status public.mf_submission_status not null default 'not_ready',
+  add column if not exists mf_error text,
+  add column if not exists mf_journal_id text,
+  add column if not exists mf_voucher_file_id text,
+  add column if not exists mf_sent_at timestamptz;
 
 create index if not exists customer_accounts_user_id_idx
   on public.customer_accounts(user_id);

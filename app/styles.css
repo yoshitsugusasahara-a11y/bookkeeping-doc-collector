@@ -420,11 +420,50 @@ textarea {
 .submission-copy {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .submission-copy small,
 .muted {
   color: var(--muted);
+}
+
+.ocr-summary {
+  background: #f7faf8;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 6px 0 0;
+  overflow: hidden;
+}
+
+.ocr-summary div {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+}
+
+.ocr-summary div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.ocr-summary dt,
+.ocr-summary dd {
+  margin: 0;
+}
+
+.ocr-summary dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.ocr-summary dd {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 
 .admin-shell {

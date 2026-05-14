@@ -1,5 +1,7 @@
 export type UserRole = "customer" | "admin";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
+export type OcrStatus = "pending" | "completed" | "failed" | "skipped";
+export type MfSubmissionStatus = "not_ready" | "not_sent" | "sent" | "failed";
 
 export type Database = {
   public: {
@@ -103,6 +105,20 @@ export type Database = {
           drive_file_id: string | null;
           drive_view_url: string | null;
           thumbnail_url: string | null;
+          ocr_status: OcrStatus;
+          ocr_error: string | null;
+          ocr_raw_response: unknown | null;
+          ocr_processed_at: string | null;
+          ocr_date: string | null;
+          ocr_amount: number | null;
+          ocr_store: string | null;
+          ocr_summary: string | null;
+          ocr_is_credit_card: boolean | null;
+          mf_status: MfSubmissionStatus;
+          mf_error: string | null;
+          mf_journal_id: string | null;
+          mf_voucher_file_id: string | null;
+          mf_sent_at: string | null;
           submitted_at: string;
         };
         Insert: {
@@ -116,6 +132,20 @@ export type Database = {
           drive_file_id?: string | null;
           drive_view_url?: string | null;
           thumbnail_url?: string | null;
+          ocr_status?: OcrStatus;
+          ocr_error?: string | null;
+          ocr_raw_response?: unknown | null;
+          ocr_processed_at?: string | null;
+          ocr_date?: string | null;
+          ocr_amount?: number | null;
+          ocr_store?: string | null;
+          ocr_summary?: string | null;
+          ocr_is_credit_card?: boolean | null;
+          mf_status?: MfSubmissionStatus;
+          mf_error?: string | null;
+          mf_journal_id?: string | null;
+          mf_voucher_file_id?: string | null;
+          mf_sent_at?: string | null;
           submitted_at?: string;
         };
         Update: {
@@ -129,6 +159,20 @@ export type Database = {
           drive_file_id?: string | null;
           drive_view_url?: string | null;
           thumbnail_url?: string | null;
+          ocr_status?: OcrStatus;
+          ocr_error?: string | null;
+          ocr_raw_response?: unknown | null;
+          ocr_processed_at?: string | null;
+          ocr_date?: string | null;
+          ocr_amount?: number | null;
+          ocr_store?: string | null;
+          ocr_summary?: string | null;
+          ocr_is_credit_card?: boolean | null;
+          mf_status?: MfSubmissionStatus;
+          mf_error?: string | null;
+          mf_journal_id?: string | null;
+          mf_voucher_file_id?: string | null;
+          mf_sent_at?: string | null;
           submitted_at?: string;
         };
         Relationships: [];
@@ -144,6 +188,8 @@ export type Database = {
     Enums: {
       user_role: UserRole;
       approval_status: ApprovalStatus;
+      ocr_status: OcrStatus;
+      mf_submission_status: MfSubmissionStatus;
     };
     CompositeTypes: Record<string, never>;
   };
