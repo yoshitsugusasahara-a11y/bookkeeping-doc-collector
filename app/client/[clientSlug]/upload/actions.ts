@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
+import { processCustomerPendingSubmissions } from "@/lib/receipts/process-submissions";
 import { createClient } from "@/lib/supabase/server";
 
 type UploadState = {
@@ -135,6 +137,19 @@ export async function createSubmission(
 
   revalidatePath(`/client/${clientSlug}/submissions`);
   revalidatePath("/admin/customers");
+  after(async () => {
+    try {
+      const backgroundSupabase = await createClient();
+      await processCustomerPendingSubmissions({
+        supabase: backgroundSupabase,
+        customerId: account.id,
+        limit: 10,
+      });
+    } catch (processError) {
+      console.error("Failed to start background receipt processing", processError);
+    }
+  });
+
   return {
     status: "success",
     message: "送信を受け付けました。続けて次の資料を送信できます。",

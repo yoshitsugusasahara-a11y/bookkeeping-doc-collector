@@ -32,6 +32,15 @@ function getGeminiModels() {
   return Array.from(new Set([defaultGeminiModel, ...fallbackGeminiModels]));
 }
 
+function getGeminiAttempts() {
+  const models = getGeminiModels();
+  return [
+    { model: models[0], delay: 0 },
+    { model: models[0], delay: 1_200 },
+    { model: models[1] || models[0], delay: 3_000 },
+  ];
+}
+
 function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -102,13 +111,12 @@ export async function analyzeReceiptWithGemini({
   let lastError = "Gemini OCR failed.";
   let lastResponse: unknown = null;
 
-  for (const model of getGeminiModels()) {
-    for (const retryDelay of [0, 900]) {
-      if (retryDelay > 0) {
-        await wait(retryDelay);
-      }
+  for (const { model, delay } of getGeminiAttempts()) {
+    if (delay > 0) {
+      await wait(delay);
+    }
 
-      try {
+    try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
@@ -180,10 +188,9 @@ export async function analyzeReceiptWithGemini({
       rawResponse: parsed,
       error: null,
     };
-  } catch (error) {
-        lastResponse = null;
-        lastError = error instanceof Error ? error.message : "Gemini OCR failed.";
-      }
+    } catch (error) {
+      lastResponse = null;
+      lastError = error instanceof Error ? error.message : "Gemini OCR failed.";
     }
   }
 

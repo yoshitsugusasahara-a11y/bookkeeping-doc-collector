@@ -13,7 +13,6 @@ export type MfJournalPayload = {
       tax_id?: string | null;
       sub_account_id?: string | null;
       department_id?: string | null;
-      invoice_kind?: "INVOICE_KIND_NOT_TARGET" | "INVOICE_KIND_QUALIFIED" | "INVOICE_KIND_UNQUALIFIED_80" | null;
     };
     creditor: {
       value: number;
@@ -21,7 +20,6 @@ export type MfJournalPayload = {
       tax_id?: string | null;
       sub_account_id?: string | null;
       department_id?: string | null;
-      invoice_kind?: "INVOICE_KIND_NOT_TARGET" | "INVOICE_KIND_QUALIFIED" | "INVOICE_KIND_UNQUALIFIED_80" | null;
     };
   }>;
 };
@@ -47,6 +45,31 @@ type MfTaxOption = {
   available?: boolean;
 };
 
+const defaultGeminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const fallbackGeminiModels = (
+  process.env.GEMINI_FALLBACK_MODELS || "gemini-2.5-flash-lite"
+)
+  .split(",")
+  .map((model) => model.trim())
+  .filter(Boolean);
+
+function getGeminiModels() {
+  return Array.from(new Set([defaultGeminiModel, ...fallbackGeminiModels]));
+}
+
+function getGeminiAttempts() {
+  const models = getGeminiModels();
+  return [
+    { model: models[0], delay: 0 },
+    { model: models[0], delay: 1_200 },
+    { model: models[1] || models[0], delay: 3_000 },
+  ];
+}
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 function extractJson(text: string) {
   const trimmed = text.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
@@ -62,7 +85,9 @@ function extractJson(text: string) {
 }
 
 function asRecord(value: unknown) {
-  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function getJournalRecord(value: unknown) {
@@ -94,8 +119,10 @@ function normalizeLineDetails(value: unknown) {
     value: amount,
     account_id: record.account_id,
     tax_id: typeof record.tax_id === "string" ? record.tax_id : null,
-    sub_account_id: typeof record.sub_account_id === "string" ? record.sub_account_id : null,
-    department_id: typeof record.department_id === "string" ? record.department_id : null,
+    sub_account_id:
+      typeof record.sub_account_id === "string" ? record.sub_account_id : null,
+    department_id:
+      typeof record.department_id === "string" ? record.department_id : null,
   };
 }
 
@@ -117,7 +144,9 @@ function normalizeJournalPayload(value: unknown): MfJournalPayload {
     const creditor = normalizeLineDetails(line.creditor);
 
     if (!debitor || !creditor) {
-      throw new Error("Gemini journal is missing required account or amount fields.");
+      throw new Error(
+        "Gemini journal is missing required account or amount fields.",
+      );
     }
 
     return {
@@ -132,7 +161,9 @@ function normalizeJournalPayload(value: unknown): MfJournalPayload {
     journal_type: "journal_entry",
     memo: typeof record.memo === "string" ? record.memo.slice(0, 200) : null,
     tags: Array.isArray(record.tags)
-      ? record.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 5)
+      ? record.tags
+          .filter((tag): tag is string => typeof tag === "string")
+          .slice(0, 5)
       : [],
     branches: normalizedBranches,
   };
@@ -148,10 +179,53 @@ function buildRemark({
   voucherFileName: string;
 }) {
   return [ocr.store, ocr.summary || transactionNote, voucherFileName]
-    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .filter(
+      (part): part is string =>
+        typeof part === "string" && part.trim().length > 0,
+    )
     .join(" ")
     .replace(/\s+/g, " ")
     .slice(0, 200);
+}
+
+function buildPrompt({
+  ocr,
+  transactionNote,
+  voucherFileName,
+  submissionTimestampLabel,
+  accounts,
+  taxes,
+}: {
+  ocr: ReceiptOcrResult;
+  transactionNote: string;
+  voucherFileName: string;
+  submissionTimestampLabel: string;
+  accounts: MfAccountOption[];
+  taxes: MfTaxOption[];
+}) {
+  return [
+    "あなたは日本の会計実務に詳しい記帳代行アシスタントです。",
+    "領収書OCR結果とユーザー入力から、Money Forward Cloud Accounting APIの /api/v3/journals に渡す journal JSONだけを返してください。",
+    "必ず下記の利用可能な勘定科目IDと税区分IDだけを使用してください。推測でIDを作らないでください。",
+    "通常仕訳として journal_type は journal_entry にしてください。",
+    "未実現の仕訳として扱うため、特殊な実現済みフラグは付けないでください。",
+    "貸方は支払方法に応じて現金またはクレジットカード等に近い科目を選んでください。見つからない場合は、もっとも近い資産/負債科目を選んでください。",
+    "借方は取引内容と店舗名から最も自然な費用科目を選んでください。",
+    "摘要 remark には店舗名、取引内容、ファイル名を短く含めてください。",
+    "金額は税込合計額を value に入れてください。",
+    "invoice_kind は送信しないでください。",
+    "返答形式はJSONのみです。",
+    "",
+    `OCR: ${JSON.stringify(ocr)}`,
+    `ユーザー入力: ${transactionNote}`,
+    `添付ファイル名: ${voucherFileName}`,
+    `メモに入れる送信日時: ${submissionTimestampLabel}`,
+    'タグは必ず ["AI"] にしてください。',
+    `勘定科目候補: ${JSON.stringify(accounts.slice(0, 200))}`,
+    `税区分候補: ${JSON.stringify(taxes.slice(0, 120))}`,
+    "",
+    '返答例: {"transaction_date":"2026-05-15","journal_type":"journal_entry","memo":"receipt import","tags":["AI"],"branches":[{"remark":"店舗名 取引内容 file.jpg","debitor":{"value":1500,"account_id":"...","tax_id":"..."},"creditor":{"value":1500,"account_id":"...","tax_id":"..."}}]}',
+  ].join("\n");
 }
 
 export async function generateMfJournalWithGemini({
@@ -170,84 +244,86 @@ export async function generateMfJournalWithGemini({
   taxes: MfTaxOption[];
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not configured.");
   }
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [
+  let lastError = "Gemini journal generation failed.";
+
+  for (const { model, delay } of getGeminiAttempts()) {
+    if (delay > 0) {
+      await wait(delay);
+    }
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contents: [
               {
-                text: [
-                  "あなたは日本の会計実務に詳しい記帳代行アシスタントです。",
-                  "領収書OCR結果とユーザー入力から、Money Forward Cloud Accounting APIの /api/v3/journals に渡す journal JSONだけを返してください。",
-                  "必ず下記の利用可能な勘定科目IDと税区分IDだけを使用してください。推測でIDを作らないでください。",
-                  "通常仕訳として journal_type は journal_entry にしてください。",
-                  "未実現の仕訳として扱うため、特殊な実現済みフラグは付けないでください。",
-                  "貸方は支払方法に応じて現金またはクレジットカード等に近い科目を選んでください。見つからない場合は、もっとも近い資産/負債科目を選んでください。",
-                  "借方は取引内容と店舗名から最も自然な費用科目を選んでください。",
-                  "摘要 remark には店舗名、取引内容、元ファイル名を短く含めてください。",
-                  "金額は税込合計額を value に入れてください。",
-                  "invoice_kind は送信しないでください。",
-                  "返答形式はJSONのみです。",
-                  "",
-                  `OCR: ${JSON.stringify(ocr)}`,
-                  `ユーザー入力: ${transactionNote}`,
-                  `添付ファイル名: ${voucherFileName}`,
-                  `メモに入れる送信日時: ${submissionTimestampLabel}`,
-                  'タグは必ず ["AI"] にしてください。',
-                  `勘定科目候補: ${JSON.stringify(accounts.slice(0, 200))}`,
-                  `税区分候補: ${JSON.stringify(taxes.slice(0, 120))}`,
-                  "",
-                  '返答例: {"transaction_date":"2026-05-15","journal_type":"journal_entry","memo":"receipt import","tags":["receipt"],"branches":[{"remark":"店舗名 取引内容 file.jpg","debitor":{"value":1500,"account_id":"...","tax_id":"..."},"creditor":{"value":1500,"account_id":"...","tax_id":"..."}}]}',
-                ].join("\n"),
+                role: "user",
+                parts: [
+                  {
+                    text: buildPrompt({
+                      ocr,
+                      transactionNote,
+                      voucherFileName,
+                      submissionTimestampLabel,
+                      accounts,
+                      taxes,
+                    }),
+                  },
+                ],
               },
             ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          responseMimeType: "application/json",
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: "application/json",
+            },
+          }),
         },
-      }),
-    },
-  );
+      );
 
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(
-      typeof payload?.error?.message === "string"
-        ? payload.error.message
-        : "Gemini journal generation failed.",
-    );
+      const payload = await response.json();
+      if (!response.ok) {
+        lastError =
+          typeof payload?.error?.message === "string"
+            ? payload.error.message
+            : "Gemini journal generation failed.";
+        continue;
+      }
+
+      const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (typeof text !== "string" || !text.trim()) {
+        lastError = "Gemini journal response did not include text.";
+        continue;
+      }
+
+      const journal = normalizeJournalPayload(JSON.parse(extractJson(text)));
+      const remark = buildRemark({ ocr, transactionNote, voucherFileName });
+
+      return {
+        ...journal,
+        memo: submissionTimestampLabel.slice(0, 200),
+        tags: ["AI"],
+        branches: journal.branches.map((branch) => ({
+          ...branch,
+          remark,
+        })),
+      };
+    } catch (error) {
+      lastError =
+        error instanceof Error
+          ? error.message
+          : "Gemini journal generation failed.";
+    }
   }
 
-  const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (typeof text !== "string" || !text.trim()) {
-    throw new Error("Gemini journal response did not include text.");
-  }
-
-  const journal = normalizeJournalPayload(JSON.parse(extractJson(text)));
-  const remark = buildRemark({ ocr, transactionNote, voucherFileName });
-
-  return {
-    ...journal,
-    memo: submissionTimestampLabel.slice(0, 200),
-    tags: ["AI"],
-    branches: journal.branches.map((branch) => ({
-      ...branch,
-      remark,
-    })),
-  };
+  throw new Error(lastError);
 }
