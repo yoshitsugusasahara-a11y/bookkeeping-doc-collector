@@ -56,6 +56,16 @@ button:disabled {
   opacity: 0.72;
 }
 
+.spin-icon {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .shell {
   margin: 0 auto;
   max-width: 1080px;

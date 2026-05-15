@@ -6,16 +6,15 @@ import {
   FileText,
   ImageIcon,
   Link2Off,
-  PlayCircle,
   ShieldCheck,
 } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import {
   disconnectMoneyForward,
-  runMoneyForwardSubmissionProcess,
   updateCustomerDriveSettings,
 } from "./actions";
+import { MfProcessForm } from "./mf-process-form";
 
 function getFileTypeLabel(mimeType: string) {
   if (mimeType === "application/pdf") return "PDF";
@@ -271,13 +270,7 @@ export default async function AdminCustomerDetailPage({
               </p>
             </div>
           </div>
-          <form action={runMoneyForwardSubmissionProcess}>
-            <input type="hidden" name="customerId" value={customer.id} />
-            <button className="primary-action" type="submit">
-              <PlayCircle size={18} />
-              MF送信処理実行
-            </button>
-          </form>
+          <MfProcessForm customerId={customer.id} />
         </section>
 
         {submissions.length === 0 && (
