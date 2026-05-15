@@ -102,6 +102,7 @@ export type Database = {
           file_name: string;
           mime_type: string;
           file_size: number;
+          source_storage_path: string | null;
           drive_file_id: string | null;
           drive_view_url: string | null;
           thumbnail_url: string | null;
@@ -129,6 +130,7 @@ export type Database = {
           file_name: string;
           mime_type: string;
           file_size: number;
+          source_storage_path?: string | null;
           drive_file_id?: string | null;
           drive_view_url?: string | null;
           thumbnail_url?: string | null;
@@ -156,6 +158,7 @@ export type Database = {
           file_name?: string;
           mime_type?: string;
           file_size?: number;
+          source_storage_path?: string | null;
           drive_file_id?: string | null;
           drive_view_url?: string | null;
           thumbnail_url?: string | null;

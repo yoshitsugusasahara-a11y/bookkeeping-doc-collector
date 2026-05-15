@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { processCustomerPendingSubmissions } from "@/lib/receipts/process-submissions";
 import { createClient } from "@/lib/supabase/server";
 
 export async function updateCustomerDriveSettings(formData: FormData) {
@@ -39,6 +40,29 @@ export async function disconnectMoneyForward(formData: FormData) {
     .from("mf_connections")
     .delete()
     .eq("customer_account_id", customerId);
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath("/admin/customers");
+}
+
+export async function runMoneyForwardSubmissionProcess(formData: FormData) {
+  const customerId = String(formData.get("customerId") || "");
+
+  if (!customerId) {
+    return;
+  }
+
+  const supabase = await createClient();
+  const { data: isAdmin, error: adminError } = await supabase.rpc("is_admin");
+
+  if (adminError || !isAdmin) {
+    return;
+  }
+
+  await processCustomerPendingSubmissions({
+    supabase,
+    customerId,
+  });
 
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");

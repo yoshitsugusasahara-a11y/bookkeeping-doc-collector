@@ -6,11 +6,16 @@ import {
   FileText,
   ImageIcon,
   Link2Off,
+  PlayCircle,
   ShieldCheck,
 } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { disconnectMoneyForward, updateCustomerDriveSettings } from "./actions";
+import {
+  disconnectMoneyForward,
+  runMoneyForwardSubmissionProcess,
+  updateCustomerDriveSettings,
+} from "./actions";
 
 function getFileTypeLabel(mimeType: string) {
   if (mimeType === "application/pdf") return "PDF";
@@ -256,6 +261,25 @@ export default async function AdminCustomerDetailPage({
       </section>
 
       <section className="history-list" aria-label="顧客の送信履歴">
+        <section className="settings-panel" aria-label="MF送信処理">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Batch Process</p>
+              <h2>MF送信処理</h2>
+              <p className="muted">
+                未処理の送信分について、Google Drive保存、OCR解析、MF仕訳送信、証憑添付をまとめて実行します。
+              </p>
+            </div>
+          </div>
+          <form action={runMoneyForwardSubmissionProcess}>
+            <input type="hidden" name="customerId" value={customer.id} />
+            <button className="primary-action" type="submit">
+              <PlayCircle size={18} />
+              MF送信処理実行
+            </button>
+          </form>
+        </section>
+
         {submissions.length === 0 && (
           <div className="empty-state">送信履歴はまだありません。</div>
         )}

@@ -3,15 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
-import { analyzeReceiptWithGemini } from "@/lib/gemini/receipt-ocr";
-import { isGoogleDriveConfigured, uploadFileToDrive } from "@/lib/google/drive";
-import { submitReceiptToMoneyForward } from "@/lib/moneyforward/auto-submit";
 import { createClient } from "@/lib/supabase/server";
 
 type UploadState = {
   status: "idle" | "success" | "error";
   message: string;
 };
+
+const receiptUploadBucket = "receipt_uploads";
 
 const allowedMimeTypes = new Set([
   "image/jpeg",
@@ -33,6 +32,13 @@ function inferMimeType(file: File) {
   if (fileName.endsWith(".heif")) return "image/heif";
   if (fileName.endsWith(".pdf")) return "application/pdf";
   return "application/octet-stream";
+}
+
+function sanitizeFileName(fileName: string) {
+  return (fileName || "receipt")
+    .replace(/[\\/:*?"<>|#%{}[\]^~`]/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 120);
 }
 
 export async function createSubmission(
@@ -69,7 +75,7 @@ export async function createSubmission(
 
   const { data: account } = await supabase
     .from("customer_accounts")
-    .select("id, approval_status, drive_folder_id")
+    .select("id, approval_status")
     .eq("user_id", user.id)
     .eq("client_slug", clientSlug)
     .maybeSingle();
@@ -82,107 +88,55 @@ export async function createSubmission(
     redirect(`/client/${clientSlug}/pending`);
   }
 
-  let driveFileId: string | null = null;
-  let driveViewUrl: string | null = null;
-  const ocr = await analyzeReceiptWithGemini({
-    file: fileValue,
-    mimeType,
-    transactionNote,
-  });
+  const sourceStoragePath = `${account.id}/${crypto.randomUUID()}-${sanitizeFileName(
+    fileValue.name,
+  )}`;
 
-  if (account.drive_folder_id && isGoogleDriveConfigured()) {
-    try {
-      const uploadedFile = await uploadFileToDrive({
-        file: fileValue,
-        folderId: account.drive_folder_id,
-        fileName: fileValue.name || "uploaded-file",
-      });
-      driveFileId = uploadedFile.fileId;
-      driveViewUrl = uploadedFile.viewUrl;
-    } catch (driveError) {
-      console.error("Failed to upload file to Google Drive", driveError);
-      return {
-        status: "error",
-        message:
-          "Google Driveへの保存に失敗しました。フォルダIDまたはDrive連携設定を確認してください。",
-      };
-    }
+  const { error: storageError } = await supabase.storage
+    .from(receiptUploadBucket)
+    .upload(sourceStoragePath, fileValue, {
+      contentType: mimeType,
+      upsert: false,
+    });
+
+  if (storageError) {
+    console.error("Failed to store receipt file", storageError);
+    return {
+      status: "error",
+      message:
+        "ファイルの一時保存に失敗しました。時間をおいて再度お試しください。",
+    };
   }
 
-  const { data: submission, error } = await supabase.from("submissions").insert({
+  const { error } = await supabase.from("submissions").insert({
     customer_account_id: account.id,
     uploaded_by_user_id: user.id,
     transaction_note: transactionNote,
     file_name: fileValue.name || "uploaded-file",
     mime_type: mimeType,
     file_size: fileValue.size,
-    drive_file_id: driveFileId,
-    drive_view_url: driveViewUrl,
-    ocr_status: ocr.status,
-    ocr_error: ocr.error,
-    ocr_raw_response: ocr.rawResponse,
-    ocr_processed_at: ocr.status === "completed" ? new Date().toISOString() : null,
-    ocr_date: ocr.status === "completed" ? ocr.result.date : null,
-    ocr_amount: ocr.status === "completed" ? ocr.result.amount : null,
-    ocr_store: ocr.status === "completed" ? ocr.result.store : null,
-    ocr_summary: ocr.status === "completed" ? ocr.result.summary : null,
-    ocr_is_credit_card:
-      ocr.status === "completed" ? ocr.result.is_credit_card : null,
+    source_storage_path: sourceStoragePath,
+    ocr_status: "pending",
+    mf_status: "not_sent",
     thumbnail_url:
       thumbnailDataUrl.startsWith("data:image/") &&
       thumbnailDataUrl.length < 700_000
         ? thumbnailDataUrl
         : null,
-  }).select("id, submitted_at").single();
+  });
 
   if (error) {
     return {
       status: "error",
-      message: "送信履歴を保存できませんでした。時間をおいて再度お試しください。",
+      message:
+        "送信履歴を保存できませんでした。時間をおいて再度お試しください。",
     };
-  }
-
-  if (submission?.id) {
-    if (ocr.status === "completed") {
-      try {
-        await submitReceiptToMoneyForward({
-          supabase,
-          customerAccountId: account.id,
-          submissionId: submission.id,
-          submittedAt: submission.submitted_at,
-          file: fileValue,
-          mimeType,
-          transactionNote,
-          ocr: ocr.result,
-        });
-      } catch (mfError) {
-        console.error("Failed to submit receipt to Money Forward", mfError);
-        await supabase
-          .from("submissions")
-          .update({
-            mf_status: "failed",
-            mf_error:
-              mfError instanceof Error
-                ? mfError.message
-                : "MF会計への送信に失敗しました。",
-          })
-          .eq("id", submission.id);
-      }
-    } else {
-      await supabase
-        .from("submissions")
-        .update({
-          mf_status: "failed",
-          mf_error: "OCRに失敗したため、MF会計へ送信できませんでした。",
-        })
-        .eq("id", submission.id);
-    }
   }
 
   revalidatePath(`/client/${clientSlug}/submissions`);
   revalidatePath("/admin/customers");
   return {
     status: "success",
-    message: "送信が完了しました。続けて次の資料を送信できます。",
+    message: "送信を受け付けました。続けて次の資料を送信できます。",
   };
 }

@@ -61,6 +61,7 @@ create table if not exists public.submissions (
   file_name text not null,
   mime_type text not null,
   file_size bigint not null,
+  source_storage_path text,
   drive_file_id text,
   drive_view_url text,
   thumbnail_url text,
@@ -82,6 +83,7 @@ create table if not exists public.submissions (
 );
 
 alter table public.submissions
+  add column if not exists source_storage_path text,
   add column if not exists ocr_status public.ocr_status not null default 'pending',
   add column if not exists ocr_error text,
   add column if not exists ocr_raw_response jsonb,
@@ -159,6 +161,10 @@ grant select, insert, update on public.customer_accounts to authenticated;
 grant select on public.admin_users to authenticated;
 grant select, insert, update on public.submissions to authenticated;
 grant select, insert, update, delete on public.mf_connections to authenticated;
+
+insert into storage.buckets (id, name, public)
+values ('receipt_uploads', 'receipt_uploads', false)
+on conflict (id) do nothing;
 
 create or replace function public.is_admin()
 returns boolean
@@ -259,6 +265,38 @@ on public.submissions for update
 to authenticated
 using (uploaded_by_user_id = auth.uid() or public.is_admin())
 with check (uploaded_by_user_id = auth.uid() or public.is_admin());
+
+drop policy if exists "receipt_uploads_insert_approved_customer" on storage.objects;
+create policy "receipt_uploads_insert_approved_customer"
+on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'receipt_uploads'
+  and exists (
+    select 1
+    from public.customer_accounts ca
+    where ca.id::text = (storage.foldername(name))[1]
+      and ca.user_id = auth.uid()
+      and ca.approval_status = 'approved'
+  )
+);
+
+drop policy if exists "receipt_uploads_select_own_or_admin" on storage.objects;
+create policy "receipt_uploads_select_own_or_admin"
+on storage.objects for select
+to authenticated
+using (
+  bucket_id = 'receipt_uploads'
+  and (
+    public.is_admin()
+    or exists (
+      select 1
+      from public.customer_accounts ca
+      where ca.id::text = (storage.foldername(name))[1]
+        and ca.user_id = auth.uid()
+    )
+  )
+);
 
 drop policy if exists "mf_connections_select_own_or_admin" on public.mf_connections;
 create policy "mf_connections_select_own_or_admin"
