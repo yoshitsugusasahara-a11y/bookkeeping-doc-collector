@@ -92,6 +92,18 @@ function normalizeJournalPayload(value: unknown): MfJournalPayload {
     }
   }
 
+  const normalizedBranches = branches.map((branch) => {
+    const line = branch as MfJournalPayload["branches"][number];
+    const { invoice_kind: _debitInvoiceKind, ...debitor } = line.debitor;
+    const { invoice_kind: _creditInvoiceKind, ...creditor } = line.creditor;
+
+    return {
+      remark: typeof line.remark === "string" ? line.remark.slice(0, 200) : null,
+      debitor,
+      creditor,
+    };
+  });
+
   return {
     transaction_date: record.transaction_date,
     journal_type: "journal_entry",
@@ -99,7 +111,7 @@ function normalizeJournalPayload(value: unknown): MfJournalPayload {
     tags: Array.isArray(record.tags)
       ? record.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 5)
       : [],
-    branches: branches as MfJournalPayload["branches"],
+    branches: normalizedBranches,
   };
 }
 
@@ -146,6 +158,7 @@ export async function generateMfJournalWithGemini({
                   "借方は取引内容と店舗名から最も自然な費用科目を選んでください。",
                   "摘要 remark には店舗名、取引内容、元ファイル名を短く含めてください。",
                   "金額は税込合計額を value に入れてください。",
+                  "invoice_kind は送信しないでください。",
                   "返答形式はJSONのみです。",
                   "",
                   `OCR: ${JSON.stringify(ocr)}`,
@@ -154,7 +167,7 @@ export async function generateMfJournalWithGemini({
                   `勘定科目候補: ${JSON.stringify(accounts.slice(0, 200))}`,
                   `税区分候補: ${JSON.stringify(taxes.slice(0, 120))}`,
                   "",
-                  '返答例: {"transaction_date":"2026-05-15","journal_type":"journal_entry","memo":"receipt import","tags":["receipt"],"branches":[{"remark":"店舗名 取引内容 file.jpg","debitor":{"value":1500,"account_id":"...","tax_id":"...","invoice_kind":"INVOICE_KIND_NOT_TARGET"},"creditor":{"value":1500,"account_id":"...","tax_id":"...","invoice_kind":"INVOICE_KIND_NOT_TARGET"}}]}',
+                  '返答例: {"transaction_date":"2026-05-15","journal_type":"journal_entry","memo":"receipt import","tags":["receipt"],"branches":[{"remark":"店舗名 取引内容 file.jpg","debitor":{"value":1500,"account_id":"...","tax_id":"..."},"creditor":{"value":1500,"account_id":"...","tax_id":"..."}}]}',
                 ].join("\n"),
               },
             ],
