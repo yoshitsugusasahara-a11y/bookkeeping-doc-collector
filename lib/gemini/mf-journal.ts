@@ -115,16 +115,34 @@ function normalizeJournalPayload(value: unknown): MfJournalPayload {
   };
 }
 
+function buildRemark({
+  ocr,
+  transactionNote,
+  voucherFileName,
+}: {
+  ocr: ReceiptOcrResult;
+  transactionNote: string;
+  voucherFileName: string;
+}) {
+  return [ocr.store, ocr.summary || transactionNote, voucherFileName]
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .slice(0, 200);
+}
+
 export async function generateMfJournalWithGemini({
   ocr,
   transactionNote,
-  originalFileName,
+  voucherFileName,
+  submissionTimestampLabel,
   accounts,
   taxes,
 }: {
   ocr: ReceiptOcrResult;
   transactionNote: string;
-  originalFileName: string;
+  voucherFileName: string;
+  submissionTimestampLabel: string;
   accounts: MfAccountOption[];
   taxes: MfTaxOption[];
 }) {
@@ -163,7 +181,9 @@ export async function generateMfJournalWithGemini({
                   "",
                   `OCR: ${JSON.stringify(ocr)}`,
                   `ユーザー入力: ${transactionNote}`,
-                  `元ファイル名: ${originalFileName}`,
+                  `添付ファイル名: ${voucherFileName}`,
+                  `メモに入れる送信日時: ${submissionTimestampLabel}`,
+                  'タグは必ず ["AI"] にしてください。',
                   `勘定科目候補: ${JSON.stringify(accounts.slice(0, 200))}`,
                   `税区分候補: ${JSON.stringify(taxes.slice(0, 120))}`,
                   "",
@@ -195,5 +215,16 @@ export async function generateMfJournalWithGemini({
     throw new Error("Gemini journal response did not include text.");
   }
 
-  return normalizeJournalPayload(JSON.parse(extractJson(text)));
+  const journal = normalizeJournalPayload(JSON.parse(extractJson(text)));
+  const remark = buildRemark({ ocr, transactionNote, voucherFileName });
+
+  return {
+    ...journal,
+    memo: submissionTimestampLabel.slice(0, 200),
+    tags: ["AI"],
+    branches: journal.branches.map((branch) => ({
+      ...branch,
+      remark,
+    })),
+  };
 }

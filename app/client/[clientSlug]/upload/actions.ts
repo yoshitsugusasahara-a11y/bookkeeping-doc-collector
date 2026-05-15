@@ -133,7 +133,7 @@ export async function createSubmission(
       thumbnailDataUrl.length < 700_000
         ? thumbnailDataUrl
         : null,
-  }).select("id").single();
+  }).select("id, submitted_at").single();
 
   if (error) {
     return {
@@ -149,6 +149,7 @@ export async function createSubmission(
           supabase,
           customerAccountId: account.id,
           submissionId: submission.id,
+          submittedAt: submission.submitted_at,
           file: fileValue,
           mimeType,
           transactionNote,

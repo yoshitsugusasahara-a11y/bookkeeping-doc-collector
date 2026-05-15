@@ -27,10 +27,18 @@ function extractJournalId(payload: unknown) {
   throw new Error("Money Forward journal response did not include journal ID.");
 }
 
+function formatSubmittedAt(value: string) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 export async function submitReceiptToMoneyForward({
   supabase,
   customerAccountId,
   submissionId,
+  submittedAt,
   file,
   mimeType,
   transactionNote,
@@ -39,6 +47,7 @@ export async function submitReceiptToMoneyForward({
   supabase: SupabaseClient<Database>;
   customerAccountId: string;
   submissionId: string;
+  submittedAt: string;
   file: File;
   mimeType: string;
   transactionNote: string;
@@ -85,10 +94,18 @@ export async function submitReceiptToMoneyForward({
     ? accountsResponse.accounts
     : [];
   const taxes = Array.isArray(taxesResponse.taxes) ? taxesResponse.taxes : [];
+  const extension = getExtensionFromMimeType(mimeType, file.name || "receipt");
+  const voucherFileName = buildVoucherFileName({
+    date: ocr.date,
+    amount: ocr.amount,
+    isCreditCard: ocr.is_credit_card,
+    extension,
+  });
   const journal = await generateMfJournalWithGemini({
     ocr,
     transactionNote,
-    originalFileName: file.name || "receipt",
+    voucherFileName,
+    submissionTimestampLabel: formatSubmittedAt(submittedAt),
     accounts: accounts as never[],
     taxes: taxes as never[],
   });
@@ -97,13 +114,6 @@ export async function submitReceiptToMoneyForward({
     journal,
   });
   const journalId = extractJournalId(journalResponse);
-  const extension = getExtensionFromMimeType(mimeType, file.name || "receipt");
-  const voucherFileName = buildVoucherFileName({
-    date: ocr.date,
-    amount: ocr.amount,
-    isCreditCard: ocr.is_credit_card,
-    extension,
-  });
   const voucherResponse = await postMoneyForwardVouchers({
     accessToken,
     journalId,
