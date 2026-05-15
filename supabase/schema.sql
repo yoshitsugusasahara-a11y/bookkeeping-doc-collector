@@ -157,7 +157,7 @@ grant usage on schema public to authenticated;
 grant select, insert, update on public.profiles to authenticated;
 grant select, insert, update on public.customer_accounts to authenticated;
 grant select on public.admin_users to authenticated;
-grant select, insert on public.submissions to authenticated;
+grant select, insert, update on public.submissions to authenticated;
 grant select, insert, update, delete on public.mf_connections to authenticated;
 
 create or replace function public.is_admin()
@@ -252,6 +252,13 @@ with check (
       and ca.approval_status = 'approved'
   )
 );
+
+drop policy if exists "submissions_update_own_or_admin" on public.submissions;
+create policy "submissions_update_own_or_admin"
+on public.submissions for update
+to authenticated
+using (uploaded_by_user_id = auth.uid() or public.is_admin())
+with check (uploaded_by_user_id = auth.uid() or public.is_admin());
 
 drop policy if exists "mf_connections_select_own_or_admin" on public.mf_connections;
 create policy "mf_connections_select_own_or_admin"

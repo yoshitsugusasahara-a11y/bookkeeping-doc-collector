@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { analyzeReceiptWithGemini } from "@/lib/gemini/receipt-ocr";
 import { isGoogleDriveConfigured, uploadFileToDrive } from "@/lib/google/drive";
+import { submitReceiptToMoneyForward } from "@/lib/moneyforward/auto-submit";
 import { createClient } from "@/lib/supabase/server";
 
 type UploadState = {
@@ -108,7 +109,7 @@ export async function createSubmission(
     }
   }
 
-  const { error } = await supabase.from("submissions").insert({
+  const { data: submission, error } = await supabase.from("submissions").insert({
     customer_account_id: account.id,
     uploaded_by_user_id: user.id,
     transaction_note: transactionNote,
@@ -132,13 +133,49 @@ export async function createSubmission(
       thumbnailDataUrl.length < 700_000
         ? thumbnailDataUrl
         : null,
-  });
+  }).select("id").single();
 
   if (error) {
     return {
       status: "error",
       message: "送信履歴を保存できませんでした。時間をおいて再度お試しください。",
     };
+  }
+
+  if (submission?.id) {
+    if (ocr.status === "completed") {
+      try {
+        await submitReceiptToMoneyForward({
+          supabase,
+          customerAccountId: account.id,
+          submissionId: submission.id,
+          file: fileValue,
+          mimeType,
+          transactionNote,
+          ocr: ocr.result,
+        });
+      } catch (mfError) {
+        console.error("Failed to submit receipt to Money Forward", mfError);
+        await supabase
+          .from("submissions")
+          .update({
+            mf_status: "failed",
+            mf_error:
+              mfError instanceof Error
+                ? mfError.message
+                : "MF会計への送信に失敗しました。",
+          })
+          .eq("id", submission.id);
+      }
+    } else {
+      await supabase
+        .from("submissions")
+        .update({
+          mf_status: "failed",
+          mf_error: "OCRに失敗したため、MF会計へ送信できませんでした。",
+        })
+        .eq("id", submission.id);
+    }
   }
 
   revalidatePath(`/client/${clientSlug}/submissions`);

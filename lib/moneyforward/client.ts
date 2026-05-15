@@ -147,6 +147,20 @@ export async function postMoneyForwardJournal({
   });
 }
 
+export async function getMoneyForwardAccounts(accessToken: string) {
+  return moneyForwardAccountingFetch({
+    accessToken,
+    path: "/api/v3/accounts",
+  }) as Promise<{ accounts?: unknown[] }>;
+}
+
+export async function getMoneyForwardTaxes(accessToken: string) {
+  return moneyForwardAccountingFetch({
+    accessToken,
+    path: "/api/v3/taxes",
+  }) as Promise<{ taxes?: unknown[] }>;
+}
+
 export async function postMoneyForwardVouchers({
   accessToken,
   journalId,
@@ -182,4 +196,15 @@ export function buildVoucherFileName({
   const amountText = typeof amount === "number" ? String(amount) : "unknown";
   const payment = isCreditCard ? "CC" : "cash";
   return `${compactDate}_${amountText}_${payment}.${extension}`;
+}
+
+export function getExtensionFromMimeType(mimeType: string, fileName: string) {
+  const lowerName = fileName.toLowerCase();
+  const extension = lowerName.match(/\.([a-z0-9]+)$/)?.[1];
+  if (extension) return extension;
+  if (mimeType.includes("png")) return "png";
+  if (mimeType.includes("heic")) return "heic";
+  if (mimeType.includes("heif")) return "heif";
+  if (mimeType === "application/pdf") return "pdf";
+  return "jpg";
 }

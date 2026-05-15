@@ -48,6 +48,13 @@ function formatAmount(value?: number | null) {
   }).format(value);
 }
 
+function getMfStatusLabel(status?: string | null) {
+  if (status === "sent") return "MF送信済み";
+  if (status === "failed") return "MF送信失敗";
+  if (status === "not_ready") return "MF未送信";
+  return "MF送信待ち";
+}
+
 function formatAdminDateTime(value?: string | null) {
   if (!value) return "未取得";
   return new Intl.DateTimeFormat("ja-JP", {
@@ -124,7 +131,7 @@ export default async function AdminCustomerDetailPage({
   const { data: submissionRows } = await supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", customer.id)
     .order("submitted_at", { ascending: false });
@@ -321,9 +328,24 @@ export default async function AdminCustomerDetailPage({
                           : "現金"}
                     </dd>
                   </div>
+                  <div>
+                    <dt>MF送信</dt>
+                    <dd>{getMfStatusLabel(item.mf_status)}</dd>
+                  </div>
+                  <div>
+                    <dt>MF送信日時</dt>
+                    <dd>
+                      {item.mf_sent_at
+                        ? formatSubmittedAt(item.mf_sent_at)
+                        : "未送信"}
+                    </dd>
+                  </div>
                 </dl>
                 {item.ocr_error && (
                   <small className="warning-text">OCR: {item.ocr_error}</small>
+                )}
+                {item.mf_error && (
+                  <small className="warning-text">MF: {item.mf_error}</small>
                 )}
               </div>
             </article>
