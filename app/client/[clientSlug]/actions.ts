@@ -102,11 +102,15 @@ export async function sendSubmissionToMoneyForward(
 
   const { supabase, account } = await getApprovedClientAccount(clientSlug);
 
-  await processSubmissionToMoneyForward({
-    supabase,
-    customerId: account.id,
-    submissionId,
-  });
+  try {
+    await processSubmissionToMoneyForward({
+      supabase,
+      customerId: account.id,
+      submissionId,
+    });
+  } catch (error) {
+    console.error("Money Forward submission failed", error);
+  }
 
   revalidatePath(`/client/${clientSlug}/submissions`);
   revalidatePath("/admin/customers");
