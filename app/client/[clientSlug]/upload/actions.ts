@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
-import { processCustomerPendingSubmissions } from "@/lib/receipts/process-submissions";
+import { processCustomerPendingOcr } from "@/lib/receipts/process-submissions";
 import { createClient } from "@/lib/supabase/server";
 
 type UploadState = {
@@ -140,7 +140,7 @@ export async function createSubmission(
   after(async () => {
     try {
       const backgroundSupabase = await createClient();
-      await processCustomerPendingSubmissions({
+      await processCustomerPendingOcr({
         supabase: backgroundSupabase,
         customerId: account.id,
         limit: 10,

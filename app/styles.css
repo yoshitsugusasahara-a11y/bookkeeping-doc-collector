@@ -343,7 +343,8 @@ h2 {
 }
 
 textarea,
-input {
+input,
+select {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -351,12 +352,15 @@ input {
   outline: none;
 }
 
-input {
+input,
+select {
   min-height: 44px;
   padding: 0 12px;
 }
 
-input[readonly] {
+input[readonly],
+input:disabled,
+select:disabled {
   background: #f4f7f5;
   color: var(--muted);
 }
@@ -403,6 +407,12 @@ textarea {
 .secondary-action {
   background: #edf3ef;
   color: var(--ink);
+}
+
+.primary-action.compact,
+.secondary-action.compact {
+  min-height: 40px;
+  padding: 0 14px;
 }
 
 .history-list {
@@ -461,6 +471,7 @@ textarea {
   display: grid;
   gap: 6px;
   min-width: 0;
+  width: 100%;
 }
 
 .submission-copy small,
@@ -504,6 +515,54 @@ textarea {
 .ocr-summary dd {
   font-size: 0.9rem;
   overflow-wrap: anywhere;
+}
+
+.ocr-edit-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.ocr-edit-form {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 12px;
+}
+
+.ocr-edit-form.locked {
+  opacity: 0.68;
+}
+
+.action-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.ocr-edit-form .action-row {
+  grid-column: 1 / -1;
+}
+
+.status-line {
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+  font-weight: 800;
+  gap: 8px;
+}
+
+.status-line span {
+  background: #f2f6f4;
+  border-radius: 999px;
+  padding: 5px 10px;
+}
+
+.compact-summary {
+  margin-top: 0;
 }
 
 .admin-shell {

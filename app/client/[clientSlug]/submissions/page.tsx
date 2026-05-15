@@ -12,7 +12,15 @@ import {
 } from "lucide-react";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { logoutClient } from "../actions";
+import {
+  logoutClient,
+  sendSubmissionToMoneyForward,
+  updateSubmissionOcr,
+} from "../actions";
+import {
+  MoneyForwardSendButton,
+  OcrSaveButton,
+} from "./submission-actions";
 
 function getFileTypeLabel(mimeType: string) {
   if (mimeType === "application/pdf") return "PDF";
@@ -53,8 +61,8 @@ function formatAmount(value?: number | null) {
 function getMfStatusLabel(status?: string | null) {
   if (status === "sent") return "MF送信済み";
   if (status === "failed") return "MF送信失敗";
-  if (status === "not_ready") return "MF未送信";
-  return "MF送信待ち";
+  if (status === "not_ready") return "MF未連携";
+  return "MF未送信";
 }
 
 export default async function ClientSubmissionsPage({
@@ -139,6 +147,9 @@ export default async function ClientSubmissionsPage({
         {submissions.map((item) => {
           const typeLabel = getFileTypeLabel(item.mime_type);
           const tone = getThumbTone(item.mime_type);
+          const isSent = item.mf_status === "sent";
+          const canSendToMf =
+            item.ocr_status === "completed" && item.mf_status !== "sent";
 
           return (
             <article className="submission-row" key={item.id}>
@@ -174,50 +185,100 @@ export default async function ClientSubmissionsPage({
                     Driveで開く
                   </a>
                 )}
-                <dl className="ocr-summary">
-                  <div>
-                    <dt>状態</dt>
-                    <dd>{getOcrStatusLabel(item.ocr_status)}</dd>
+
+                <div className="ocr-edit-panel">
+                  <div className="status-line">
+                    <span>{getOcrStatusLabel(item.ocr_status)}</span>
+                    <span>{getMfStatusLabel(item.mf_status)}</span>
                   </div>
-                  <div>
-                    <dt>取引日</dt>
-                    <dd>{item.ocr_date || "未取得"}</dd>
-                  </div>
-                  <div>
-                    <dt>金額</dt>
-                    <dd>{formatAmount(item.ocr_amount)}</dd>
-                  </div>
-                  <div>
-                    <dt>店舗名</dt>
-                    <dd>{item.ocr_store || "未取得"}</dd>
-                  </div>
-                  <div>
-                    <dt>概要</dt>
-                    <dd>{item.ocr_summary || "未取得"}</dd>
-                  </div>
-                  <div>
-                    <dt>支払方法</dt>
-                    <dd>
-                      {item.ocr_is_credit_card === null
-                        ? "未取得"
-                        : item.ocr_is_credit_card
-                          ? "クレカ等"
-                          : "現金"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>MF送信</dt>
-                    <dd>{getMfStatusLabel(item.mf_status)}</dd>
-                  </div>
-                  <div>
-                    <dt>MF送信日時</dt>
-                    <dd>
-                      {item.mf_sent_at
-                        ? formatSubmittedAt(item.mf_sent_at)
-                        : "未送信"}
-                    </dd>
-                  </div>
-                </dl>
+
+                  <form
+                    className={isSent ? "ocr-edit-form locked" : "ocr-edit-form"}
+                    action={updateSubmissionOcr.bind(null, clientSlug)}
+                  >
+                    <input type="hidden" name="submissionId" value={item.id} />
+                    <label className="field">
+                      <span>取引日</span>
+                      <input
+                        type="date"
+                        name="ocrDate"
+                        defaultValue={item.ocr_date || ""}
+                        disabled={isSent}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>金額</span>
+                      <input
+                        inputMode="numeric"
+                        name="ocrAmount"
+                        defaultValue={item.ocr_amount ?? ""}
+                        placeholder="例: 1500"
+                        disabled={isSent}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>店舗名</span>
+                      <input
+                        name="ocrStore"
+                        defaultValue={item.ocr_store || ""}
+                        placeholder="例: コンビニ"
+                        disabled={isSent}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>概要</span>
+                      <input
+                        name="ocrSummary"
+                        defaultValue={item.ocr_summary || ""}
+                        placeholder="例: 備品"
+                        disabled={isSent}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>支払方法</span>
+                      <select
+                        name="ocrIsCreditCard"
+                        defaultValue={
+                          item.ocr_is_credit_card === null
+                            ? ""
+                            : String(item.ocr_is_credit_card)
+                        }
+                        disabled={isSent}
+                      >
+                        <option value="">未取得</option>
+                        <option value="false">現金</option>
+                        <option value="true">クレカ等</option>
+                      </select>
+                    </label>
+                    <div className="action-row">
+                      <OcrSaveButton disabled={isSent} />
+                    </div>
+                  </form>
+
+                  <dl className="ocr-summary compact-summary">
+                    <div>
+                      <dt>金額</dt>
+                      <dd>{formatAmount(item.ocr_amount)}</dd>
+                    </div>
+                    <div>
+                      <dt>MF送信日時</dt>
+                      <dd>
+                        {item.mf_sent_at
+                          ? formatSubmittedAt(item.mf_sent_at)
+                          : "未送信"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <form
+                    className="action-row"
+                    action={sendSubmissionToMoneyForward.bind(null, clientSlug)}
+                  >
+                    <input type="hidden" name="submissionId" value={item.id} />
+                    <MoneyForwardSendButton disabled={!canSendToMf} />
+                  </form>
+                </div>
+
                 {item.ocr_error && (
                   <small className="warning-text">OCR: {item.ocr_error}</small>
                 )}
