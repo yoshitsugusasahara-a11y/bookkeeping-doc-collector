@@ -68,3 +68,36 @@ export async function uploadFileToDrive({
       `https://drive.google.com/file/d/${fileId}/view`,
   };
 }
+
+export async function moveDriveFile({
+  fileId,
+  folderId,
+}: {
+  fileId: string;
+  folderId: string;
+}): Promise<DriveUploadResult> {
+  const drive = createDriveClient();
+  const current = await drive.files.get({
+    fileId,
+    fields: "parents",
+  });
+  const previousParents = current.data.parents?.join(",");
+
+  const response = await drive.files.update({
+    fileId,
+    addParents: folderId,
+    removeParents: previousParents,
+    fields: "id, webViewLink",
+  });
+
+  if (!response.data.id) {
+    throw new Error("Google Driveファイルの移動に失敗しました。");
+  }
+
+  return {
+    fileId: response.data.id,
+    viewUrl:
+      response.data.webViewLink ||
+      `https://drive.google.com/file/d/${response.data.id}/view`,
+  };
+}

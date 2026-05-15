@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { analyzeReceiptWithGemini } from "@/lib/gemini/receipt-ocr";
-import { isGoogleDriveConfigured, uploadFileToDrive } from "@/lib/google/drive";
+import {
+  isGoogleDriveConfigured,
+  moveDriveFile,
+  uploadFileToDrive,
+} from "@/lib/google/drive";
 import { submitReceiptToMoneyForward } from "@/lib/moneyforward/auto-submit";
 import type { Database } from "@/lib/supabase/types";
 
@@ -15,6 +19,7 @@ type SubmissionRow = {
   source_storage_path: string | null;
   submitted_at: string;
   drive_file_id: string | null;
+  drive_view_url: string | null;
   ocr_status: string;
   ocr_date: string | null;
   ocr_amount: number | null;
@@ -38,6 +43,62 @@ function getCompletedOcr(submission: SubmissionRow) {
   };
 }
 
+async function deleteStoredSource({
+  supabase,
+  submissionId,
+  storagePath,
+}: {
+  supabase: SupabaseClient<Database>;
+  submissionId: string;
+  storagePath: string | null;
+}) {
+  if (!storagePath) return;
+
+  const { error } = await supabase.storage
+    .from(receiptUploadBucket)
+    .remove([storagePath]);
+
+  if (error) {
+    console.error("Failed to delete stored source file", error);
+    return;
+  }
+
+  await supabase
+    .from("submissions")
+    .update({
+      source_storage_path: null,
+      source_deleted_at: new Date().toISOString(),
+    })
+    .eq("id", submissionId);
+}
+
+async function moveToErrorFolderIfPossible({
+  supabase,
+  submissionId,
+  driveFileId,
+  errorDriveFolderId,
+}: {
+  supabase: SupabaseClient<Database>;
+  submissionId: string;
+  driveFileId: string | null;
+  errorDriveFolderId: string | null;
+}) {
+  if (!driveFileId || !errorDriveFolderId || !isGoogleDriveConfigured()) return;
+
+  const movedFile = await moveDriveFile({
+    fileId: driveFileId,
+    folderId: errorDriveFolderId,
+  });
+
+  await supabase
+    .from("submissions")
+    .update({
+      drive_file_id: movedFile.fileId,
+      drive_view_url: movedFile.viewUrl,
+    })
+    .eq("id", submissionId);
+}
+
 export async function processCustomerPendingSubmissions({
   supabase,
   customerId,
@@ -49,7 +110,7 @@ export async function processCustomerPendingSubmissions({
 }) {
   const { data: customer } = await supabase
     .from("customer_accounts")
-    .select("id, drive_folder_id")
+    .select("id, drive_folder_id, error_drive_folder_id")
     .eq("id", customerId)
     .maybeSingle();
 
@@ -60,7 +121,7 @@ export async function processCustomerPendingSubmissions({
   const { data: submissions, error } = await supabase
     .from("submissions")
     .select(
-      "id, customer_account_id, transaction_note, file_name, mime_type, source_storage_path, submitted_at, drive_file_id, ocr_status, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card",
+      "id, customer_account_id, transaction_note, file_name, mime_type, source_storage_path, submitted_at, drive_file_id, drive_view_url, ocr_status, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card",
     )
     .eq("customer_account_id", customerId)
     .neq("mf_status", "sent")
@@ -75,6 +136,7 @@ export async function processCustomerPendingSubmissions({
   let processed = 0;
 
   for (const submission of submissions ?? []) {
+    let driveFileId = submission.drive_file_id;
     try {
       const { data: storedFile, error: downloadError } = await supabase.storage
         .from(receiptUploadBucket)
@@ -90,9 +152,6 @@ export async function processCustomerPendingSubmissions({
         submission.mime_type,
       );
 
-      let driveFileId = submission.drive_file_id;
-      let driveViewUrl: string | null = null;
-
       if (!driveFileId && customer.drive_folder_id && isGoogleDriveConfigured()) {
         const uploadedFile = await uploadFileToDrive({
           file,
@@ -100,13 +159,12 @@ export async function processCustomerPendingSubmissions({
           fileName: submission.file_name || "uploaded-file",
         });
         driveFileId = uploadedFile.fileId;
-        driveViewUrl = uploadedFile.viewUrl;
 
         await supabase
           .from("submissions")
           .update({
             drive_file_id: driveFileId,
-            drive_view_url: driveViewUrl,
+            drive_view_url: uploadedFile.viewUrl,
           })
           .eq("id", submission.id);
       }
@@ -121,6 +179,13 @@ export async function processCustomerPendingSubmissions({
           });
 
       if (ocr.status !== "completed") {
+        await moveToErrorFolderIfPossible({
+          supabase,
+          submissionId: submission.id,
+          driveFileId,
+          errorDriveFolderId: customer.error_drive_folder_id,
+        });
+
         await supabase
           .from("submissions")
           .update({
@@ -131,6 +196,14 @@ export async function processCustomerPendingSubmissions({
             mf_error: "OCRに失敗したため、MF会計へ送信できませんでした。",
           })
           .eq("id", submission.id);
+
+        if (driveFileId) {
+          await deleteStoredSource({
+            supabase,
+            submissionId: submission.id,
+            storagePath: submission.source_storage_path,
+          });
+        }
         continue;
       }
 
@@ -166,9 +239,28 @@ export async function processCustomerPendingSubmissions({
         ocr: ocr.result,
       });
 
+      if (driveFileId) {
+        await deleteStoredSource({
+          supabase,
+          submissionId: submission.id,
+          storagePath: submission.source_storage_path,
+        });
+      }
+
       processed += 1;
     } catch (processError) {
       console.error("Failed to process pending submission", processError);
+      try {
+        await moveToErrorFolderIfPossible({
+          supabase,
+          submissionId: submission.id,
+          driveFileId,
+          errorDriveFolderId: customer.error_drive_folder_id,
+        });
+      } catch (moveError) {
+        console.error("Failed to move failed receipt to error folder", moveError);
+      }
+
       await supabase
         .from("submissions")
         .update({
@@ -179,6 +271,14 @@ export async function processCustomerPendingSubmissions({
               : "処理中にエラーが発生しました。",
         })
         .eq("id", submission.id);
+
+      if (driveFileId) {
+        await deleteStoredSource({
+          supabase,
+          submissionId: submission.id,
+          storagePath: submission.source_storage_path,
+        });
+      }
     }
   }
 

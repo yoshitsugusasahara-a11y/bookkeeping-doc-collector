@@ -109,7 +109,7 @@ export default async function AdminCustomerDetailPage({
   const { data: customer } = await supabase
     .from("customer_accounts")
     .select(
-      "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, created_at",
+      "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, created_at",
     )
     .eq("id", customerId)
     .maybeSingle();
@@ -251,6 +251,22 @@ export default async function AdminCustomerDetailPage({
               name="driveFolderName"
               defaultValue={customer.drive_folder_name || ""}
               placeholder="例: 東京商会 証憑フォルダ"
+            />
+          </label>
+          <label className="field">
+            <span>エラー用フォルダID</span>
+            <input
+              name="errorDriveFolderId"
+              defaultValue={customer.error_drive_folder_id || ""}
+              placeholder="例: エラー証憑用のGoogle DriveフォルダID"
+            />
+          </label>
+          <label className="field">
+            <span>エラー用表示名</span>
+            <input
+              name="errorDriveFolderName"
+              defaultValue={customer.error_drive_folder_name || ""}
+              placeholder="例: 東京商会 エラー証憑フォルダ"
             />
           </label>
           <button className="primary-action" type="submit">

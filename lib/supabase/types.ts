@@ -42,6 +42,8 @@ export type Database = {
           approval_status: ApprovalStatus;
           drive_folder_id: string | null;
           drive_folder_name: string | null;
+          error_drive_folder_id: string | null;
+          error_drive_folder_name: string | null;
           approved_at: string | null;
           created_at: string;
           updated_at: string;
@@ -54,6 +56,8 @@ export type Database = {
           approval_status?: ApprovalStatus;
           drive_folder_id?: string | null;
           drive_folder_name?: string | null;
+          error_drive_folder_id?: string | null;
+          error_drive_folder_name?: string | null;
           approved_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -66,6 +70,8 @@ export type Database = {
           approval_status?: ApprovalStatus;
           drive_folder_id?: string | null;
           drive_folder_name?: string | null;
+          error_drive_folder_id?: string | null;
+          error_drive_folder_name?: string | null;
           approved_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -103,6 +109,7 @@ export type Database = {
           mime_type: string;
           file_size: number;
           source_storage_path: string | null;
+          source_deleted_at: string | null;
           drive_file_id: string | null;
           drive_view_url: string | null;
           thumbnail_url: string | null;
@@ -131,6 +138,7 @@ export type Database = {
           mime_type: string;
           file_size: number;
           source_storage_path?: string | null;
+          source_deleted_at?: string | null;
           drive_file_id?: string | null;
           drive_view_url?: string | null;
           thumbnail_url?: string | null;
@@ -159,6 +167,7 @@ export type Database = {
           mime_type?: string;
           file_size?: number;
           source_storage_path?: string | null;
+          source_deleted_at?: string | null;
           drive_file_id?: string | null;
           drive_view_url?: string | null;
           thumbnail_url?: string | null;

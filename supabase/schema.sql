@@ -41,6 +41,8 @@ create table if not exists public.customer_accounts (
   approval_status public.approval_status not null default 'pending',
   drive_folder_id text,
   drive_folder_name text,
+  error_drive_folder_id text,
+  error_drive_folder_name text,
   approved_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -62,6 +64,7 @@ create table if not exists public.submissions (
   mime_type text not null,
   file_size bigint not null,
   source_storage_path text,
+  source_deleted_at timestamptz,
   drive_file_id text,
   drive_view_url text,
   thumbnail_url text,
@@ -84,6 +87,7 @@ create table if not exists public.submissions (
 
 alter table public.submissions
   add column if not exists source_storage_path text,
+  add column if not exists source_deleted_at timestamptz,
   add column if not exists ocr_status public.ocr_status not null default 'pending',
   add column if not exists ocr_error text,
   add column if not exists ocr_raw_response jsonb,
@@ -98,6 +102,10 @@ alter table public.submissions
   add column if not exists mf_journal_id text,
   add column if not exists mf_voucher_file_id text,
   add column if not exists mf_sent_at timestamptz;
+
+alter table public.customer_accounts
+  add column if not exists error_drive_folder_id text,
+  add column if not exists error_drive_folder_name text;
 
 create table if not exists public.mf_connections (
   id uuid primary key default gen_random_uuid(),

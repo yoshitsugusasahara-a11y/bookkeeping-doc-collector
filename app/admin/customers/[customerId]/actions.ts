@@ -8,6 +8,8 @@ export async function updateCustomerDriveSettings(formData: FormData) {
   const customerId = String(formData.get("customerId") || "");
   const driveFolderId = String(formData.get("driveFolderId") || "").trim();
   const driveFolderName = String(formData.get("driveFolderName") || "").trim();
+  const errorDriveFolderId = String(formData.get("errorDriveFolderId") || "").trim();
+  const errorDriveFolderName = String(formData.get("errorDriveFolderName") || "").trim();
 
   if (!customerId) {
     return;
@@ -20,6 +22,8 @@ export async function updateCustomerDriveSettings(formData: FormData) {
     .update({
       drive_folder_id: driveFolderId || null,
       drive_folder_name: driveFolderName || null,
+      error_drive_folder_id: errorDriveFolderId || null,
+      error_drive_folder_name: errorDriveFolderName || null,
     })
     .eq("id", customerId);
 
