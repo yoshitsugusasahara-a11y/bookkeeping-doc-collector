@@ -122,10 +122,17 @@ export async function moneyForwardAccountingFetch({
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
+    console.error("Money Forward API error", {
+      status: response.status,
+      path,
+      payload,
+    });
     const message =
       payload && typeof payload === "object" && "message" in payload
         ? String(payload.message)
-        : `Money Forward API request failed: ${response.status}`;
+        : payload
+          ? JSON.stringify(payload).slice(0, 1200)
+          : `Money Forward API request failed: ${response.status}`;
     throw new Error(message);
   }
 

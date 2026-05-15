@@ -73,6 +73,25 @@ function normalizeJournalPayload(value: unknown): MfJournalPayload {
     throw new Error("Gemini did not return a usable Money Forward journal.");
   }
 
+  for (const branch of branches) {
+    const line = branch && typeof branch === "object" ? branch as Record<string, unknown> : {};
+    const debitor = line.debitor && typeof line.debitor === "object"
+      ? line.debitor as Record<string, unknown>
+      : {};
+    const creditor = line.creditor && typeof line.creditor === "object"
+      ? line.creditor as Record<string, unknown>
+      : {};
+
+    if (
+      typeof debitor.account_id !== "string" ||
+      typeof creditor.account_id !== "string" ||
+      typeof debitor.value !== "number" ||
+      typeof creditor.value !== "number"
+    ) {
+      throw new Error("Gemini journal is missing required account or amount fields.");
+    }
+  }
+
   return {
     transaction_date: record.transaction_date,
     journal_type: "journal_entry",
