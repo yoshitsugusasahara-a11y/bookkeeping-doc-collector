@@ -61,8 +61,46 @@ function extractJson(text: string) {
   return trimmed;
 }
 
+function asRecord(value: unknown) {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function getJournalRecord(value: unknown) {
+  const record = asRecord(value);
+  if (record.journal && typeof record.journal === "object") {
+    return record.journal as Record<string, unknown>;
+  }
+  return record;
+}
+
+function toAmount(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[^\d.-]/g, ""));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function normalizeLineDetails(value: unknown) {
+  const record = asRecord(value);
+  const amount = toAmount(record.value);
+
+  if (typeof record.account_id !== "string" || amount === null) {
+    return null;
+  }
+
+  return {
+    value: amount,
+    account_id: record.account_id,
+    tax_id: typeof record.tax_id === "string" ? record.tax_id : null,
+    sub_account_id: typeof record.sub_account_id === "string" ? record.sub_account_id : null,
+    department_id: typeof record.department_id === "string" ? record.department_id : null,
+  };
+}
+
 function normalizeJournalPayload(value: unknown): MfJournalPayload {
-  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const record = getJournalRecord(value);
   const branches = Array.isArray(record.branches) ? record.branches : [];
 
   if (
@@ -73,29 +111,14 @@ function normalizeJournalPayload(value: unknown): MfJournalPayload {
     throw new Error("Gemini did not return a usable Money Forward journal.");
   }
 
-  for (const branch of branches) {
-    const line = branch && typeof branch === "object" ? branch as Record<string, unknown> : {};
-    const debitor = line.debitor && typeof line.debitor === "object"
-      ? line.debitor as Record<string, unknown>
-      : {};
-    const creditor = line.creditor && typeof line.creditor === "object"
-      ? line.creditor as Record<string, unknown>
-      : {};
+  const normalizedBranches = branches.map((branch) => {
+    const line = asRecord(branch);
+    const debitor = normalizeLineDetails(line.debitor);
+    const creditor = normalizeLineDetails(line.creditor);
 
-    if (
-      typeof debitor.account_id !== "string" ||
-      typeof creditor.account_id !== "string" ||
-      typeof debitor.value !== "number" ||
-      typeof creditor.value !== "number"
-    ) {
+    if (!debitor || !creditor) {
       throw new Error("Gemini journal is missing required account or amount fields.");
     }
-  }
-
-  const normalizedBranches = branches.map((branch) => {
-    const line = branch as MfJournalPayload["branches"][number];
-    const { invoice_kind: _debitInvoiceKind, ...debitor } = line.debitor;
-    const { invoice_kind: _creditInvoiceKind, ...creditor } = line.creditor;
 
     return {
       remark: typeof line.remark === "string" ? line.remark.slice(0, 200) : null,
