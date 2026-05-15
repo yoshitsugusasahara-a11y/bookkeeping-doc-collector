@@ -10,10 +10,8 @@ import {
 } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import {
-  disconnectMoneyForward,
-  updateCustomerDriveSettings,
-} from "./actions";
+import { disconnectMoneyForward } from "./actions";
+import { DriveSettingsForm } from "./drive-settings-form";
 import { MfProcessForm } from "./mf-process-form";
 
 function getFileTypeLabel(mimeType: string) {
@@ -235,44 +233,13 @@ export default async function AdminCustomerDetailPage({
             顧客の送信ファイルを保存するGoogle DriveフォルダIDを登録します。
           </p>
         </div>
-        <form className="drive-form" action={updateCustomerDriveSettings}>
-          <input type="hidden" name="customerId" value={customer.id} />
-          <label className="field">
-            <span>フォルダID</span>
-            <input
-              name="driveFolderId"
-              defaultValue={customer.drive_folder_id || ""}
-              placeholder="例: 1AbCdEfGhIjKlMnOpQrStUvWxYz"
-            />
-          </label>
-          <label className="field">
-            <span>表示名</span>
-            <input
-              name="driveFolderName"
-              defaultValue={customer.drive_folder_name || ""}
-              placeholder="例: 東京商会 証憑フォルダ"
-            />
-          </label>
-          <label className="field">
-            <span>エラー用フォルダID</span>
-            <input
-              name="errorDriveFolderId"
-              defaultValue={customer.error_drive_folder_id || ""}
-              placeholder="例: エラー証憑用のGoogle DriveフォルダID"
-            />
-          </label>
-          <label className="field">
-            <span>エラー用表示名</span>
-            <input
-              name="errorDriveFolderName"
-              defaultValue={customer.error_drive_folder_name || ""}
-              placeholder="例: 東京商会 エラー証憑フォルダ"
-            />
-          </label>
-          <button className="primary-action" type="submit">
-            Drive設定を保存
-          </button>
-        </form>
+        <DriveSettingsForm
+          customerId={customer.id}
+          driveFolderId={customer.drive_folder_id}
+          driveFolderName={customer.drive_folder_name}
+          errorDriveFolderId={customer.error_drive_folder_id}
+          errorDriveFolderName={customer.error_drive_folder_name}
+        />
       </section>
 
       <section className="history-list" aria-label="顧客の送信履歴">

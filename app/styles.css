@@ -60,6 +60,18 @@ button:disabled {
   animation: spin 0.9s linear infinite;
 }
 
+.form-message {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin: 0;
+}
+
+.form-message.success {
+  color: var(--green);
+  font-weight: 700;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

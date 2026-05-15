@@ -4,7 +4,15 @@ import { revalidatePath } from "next/cache";
 import { processCustomerPendingSubmissions } from "@/lib/receipts/process-submissions";
 import { createClient } from "@/lib/supabase/server";
 
-export async function updateCustomerDriveSettings(formData: FormData) {
+export type DriveSettingsState = {
+  status: "idle" | "success" | "error";
+  message: string;
+};
+
+export async function updateCustomerDriveSettings(
+  _prevState: DriveSettingsState,
+  formData: FormData,
+): Promise<DriveSettingsState> {
   const customerId = String(formData.get("customerId") || "");
   const driveFolderId = String(formData.get("driveFolderId") || "").trim();
   const driveFolderName = String(formData.get("driveFolderName") || "").trim();
@@ -12,12 +20,12 @@ export async function updateCustomerDriveSettings(formData: FormData) {
   const errorDriveFolderName = String(formData.get("errorDriveFolderName") || "").trim();
 
   if (!customerId) {
-    return;
+    return { status: "error", message: "顧客情報を取得できませんでした。" };
   }
 
   const supabase = await createClient();
 
-  await supabase
+  const { error } = await supabase
     .from("customer_accounts")
     .update({
       drive_folder_id: driveFolderId || null,
@@ -27,8 +35,13 @@ export async function updateCustomerDriveSettings(formData: FormData) {
     })
     .eq("id", customerId);
 
+  if (error) {
+    return { status: "error", message: "Drive設定を保存できませんでした。" };
+  }
+
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
+  return { status: "success", message: "Drive設定を保存しました。" };
 }
 
 export async function disconnectMoneyForward(formData: FormData) {
