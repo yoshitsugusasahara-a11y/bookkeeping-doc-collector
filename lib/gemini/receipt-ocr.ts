@@ -70,7 +70,7 @@ function normalizeOcrResult(value: unknown): ReceiptOcrResult {
     store: typeof record.store === "string" && record.store ? record.store : null,
     summary:
       typeof record.summary === "string" && record.summary
-        ? record.summary
+        ? record.summary.slice(0, 15)
         : null,
     is_credit_card:
       typeof record.is_credit_card === "boolean"
@@ -123,6 +123,10 @@ export async function analyzeReceiptWithGemini({
               parts: [
                 {
                   text: [
+                    "Return only a valid JSON object. Do not include Markdown fences, explanations, or extra text.",
+                    "The amount must be an integer number without commas or currency symbols.",
+                    "The summary must be a concise Japanese description within 15 characters.",
+                    "Set is_credit_card to true when the receipt mentions Visa, Master, JCB, AMEX, credit sale, card payment, card, or transportation IC. Set it to false for cash. Use null only when unknown.",
                     "あなたは日本の領収書・レシートを読み取るOCRアシスタントです。",
                     "添付画像またはPDFから、以下のJSONだけを返してください。",
                     "推測が難しい項目は null にしてください。金額は税込合計を整数で返してください。",
