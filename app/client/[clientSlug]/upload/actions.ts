@@ -13,6 +13,7 @@ type UploadState = {
 };
 
 const receiptUploadBucket = "receipt_uploads";
+const maxUploadSizeBytes = 25 * 1024 * 1024;
 
 const allowedMimeTypes = new Set([
   "image/jpeg",
@@ -23,9 +24,13 @@ const allowedMimeTypes = new Set([
 ]);
 
 function inferMimeType(file: File) {
-  if (file.type) return file.type.toLowerCase();
-
+  const browserMimeType = file.type.toLowerCase();
   const fileName = file.name.toLowerCase();
+
+  if (browserMimeType && browserMimeType !== "application/octet-stream") {
+    return browserMimeType;
+  }
+
   if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
     return "image/jpeg";
   }
@@ -57,7 +62,17 @@ export async function createSubmission(
   }
 
   if (!(fileValue instanceof File) || fileValue.size === 0) {
-    return { status: "error", message: "画像またはPDFを選択してください。" };
+    return {
+      status: "error",
+      message: "画像またはPDFを選択してください。",
+    };
+  }
+
+  if (fileValue.size > maxUploadSizeBytes) {
+    return {
+      status: "error",
+      message: "ファイルサイズが大きすぎます。25MB以下のファイルを選択してください。",
+    };
   }
 
   const mimeType = inferMimeType(fileValue);
@@ -93,20 +108,27 @@ export async function createSubmission(
   const sourceStoragePath = `${account.id}/${crypto.randomUUID()}-${sanitizeFileName(
     fileValue.name,
   )}`;
+  const uploadBody = Buffer.from(await fileValue.arrayBuffer());
 
   const { error: storageError } = await supabase.storage
     .from(receiptUploadBucket)
-    .upload(sourceStoragePath, fileValue, {
+    .upload(sourceStoragePath, uploadBody, {
       contentType: mimeType,
       upsert: false,
     });
 
   if (storageError) {
-    console.error("Failed to store receipt file", storageError);
+    console.error("Failed to store receipt file", {
+      message: storageError.message,
+      name: storageError.name,
+      fileName: fileValue.name,
+      fileSize: fileValue.size,
+      mimeType,
+      sourceStoragePath,
+    });
     return {
       status: "error",
-      message:
-        "ファイルの一時保存に失敗しました。時間をおいて再度お試しください。",
+      message: `ファイルの一時保存に失敗しました。${storageError.message}`,
     };
   }
 
@@ -130,8 +152,7 @@ export async function createSubmission(
   if (error) {
     return {
       status: "error",
-      message:
-        "送信履歴を保存できませんでした。時間をおいて再度お試しください。",
+      message: "送信履歴を保存できませんでした。時間をおいて再度お試しください。",
     };
   }
 
