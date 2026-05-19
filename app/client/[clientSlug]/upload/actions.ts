@@ -42,10 +42,17 @@ function inferMimeType(file: File) {
 }
 
 function sanitizeFileName(fileName: string) {
-  return (fileName || "receipt")
-    .replace(/[\\/:*?"<>|#%{}[\]^~`]/g, "_")
-    .replace(/\s+/g, "_")
-    .slice(0, 120);
+  const fallback = "uploaded-file";
+  const extensionMatch = fileName.match(/(\.[a-z0-9]{1,10})$/i);
+  const extension = extensionMatch?.[1]?.toLowerCase() ?? "";
+  const baseName = (extension ? fileName.slice(0, -extension.length) : fileName)
+    .normalize("NFKD")
+    .replace(/[^\w.-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 90);
+
+  return `${baseName || fallback}${extension}`;
 }
 
 export async function createSubmission(
