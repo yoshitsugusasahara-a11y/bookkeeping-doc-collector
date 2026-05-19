@@ -983,6 +983,54 @@ textarea {
   gap: 14px;
 }
 
+.document-rule-form {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.document-rule-form .field:nth-of-type(3) {
+  grid-column: 1 / -1;
+}
+
+.document-rule-list {
+  display: grid;
+  gap: 10px;
+}
+
+.document-rule-card {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr auto;
+  padding: 14px;
+}
+
+.document-rule-card small {
+  color: var(--muted);
+  display: block;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+
+.rule-title-row,
+.rule-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.rule-title-row {
+  flex-wrap: wrap;
+}
+
+.compact-action {
+  min-height: 38px;
+  padding: 0 12px;
+}
+
 .empty-state {
   color: var(--muted);
   padding: 22px;
@@ -1056,6 +1104,8 @@ textarea {
   .link-grid,
   .metric-grid,
   .url-builder-grid,
+  .document-rule-form,
+  .document-rule-card,
   .connection-details {
     grid-template-columns: 1fr;
   }

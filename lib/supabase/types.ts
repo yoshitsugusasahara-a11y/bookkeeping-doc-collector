@@ -2,6 +2,7 @@ export type UserRole = "customer" | "admin";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
 export type OcrStatus = "pending" | "completed" | "failed" | "skipped";
 export type MfSubmissionStatus = "not_ready" | "not_sent" | "sent" | "failed";
+export type DocumentClassificationStatus = "pending" | "completed" | "failed";
 
 export type Database = {
   public: {
@@ -113,6 +114,13 @@ export type Database = {
           drive_file_id: string | null;
           drive_view_url: string | null;
           thumbnail_url: string | null;
+          document_classification_status: DocumentClassificationStatus;
+          document_kind: string | null;
+          document_rule_id: string | null;
+          document_confidence: number | null;
+          document_error: string | null;
+          document_processed_at: string | null;
+          document_drive_file_name: string | null;
           ocr_status: OcrStatus;
           ocr_error: string | null;
           ocr_raw_response: unknown | null;
@@ -142,6 +150,13 @@ export type Database = {
           drive_file_id?: string | null;
           drive_view_url?: string | null;
           thumbnail_url?: string | null;
+          document_classification_status?: DocumentClassificationStatus;
+          document_kind?: string | null;
+          document_rule_id?: string | null;
+          document_confidence?: number | null;
+          document_error?: string | null;
+          document_processed_at?: string | null;
+          document_drive_file_name?: string | null;
           ocr_status?: OcrStatus;
           ocr_error?: string | null;
           ocr_raw_response?: unknown | null;
@@ -171,6 +186,13 @@ export type Database = {
           drive_file_id?: string | null;
           drive_view_url?: string | null;
           thumbnail_url?: string | null;
+          document_classification_status?: DocumentClassificationStatus;
+          document_kind?: string | null;
+          document_rule_id?: string | null;
+          document_confidence?: number | null;
+          document_error?: string | null;
+          document_processed_at?: string | null;
+          document_drive_file_name?: string | null;
           ocr_status?: OcrStatus;
           ocr_error?: string | null;
           ocr_raw_response?: unknown | null;
@@ -228,6 +250,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      document_rules: {
+        Row: {
+          id: string;
+          customer_account_id: string;
+          document_name: string;
+          match_features: string | null;
+          file_name_rule: string;
+          drive_folder_id: string | null;
+          drive_folder_name: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_account_id: string;
+          document_name: string;
+          match_features?: string | null;
+          file_name_rule: string;
+          drive_folder_id?: string | null;
+          drive_folder_name?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          customer_account_id?: string;
+          document_name?: string;
+          match_features?: string | null;
+          file_name_rule?: string;
+          drive_folder_id?: string | null;
+          drive_folder_name?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -241,6 +302,7 @@ export type Database = {
       approval_status: ApprovalStatus;
       ocr_status: OcrStatus;
       mf_submission_status: MfSubmissionStatus;
+      document_classification_status: DocumentClassificationStatus;
     };
     CompositeTypes: Record<string, never>;
   };

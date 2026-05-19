@@ -2,15 +2,22 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowLeft,
+  Download,
   ExternalLink,
   FileText,
   ImageIcon,
   Link2Off,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { disconnectMoneyForward } from "./actions";
+import {
+  deleteDocumentRule,
+  disconnectMoneyForward,
+  toggleDocumentRule,
+} from "./actions";
+import { DocumentRuleForm } from "./document-rule-form";
 import { DriveSettingsForm } from "./drive-settings-form";
 import { MfProcessForm } from "./mf-process-form";
 
@@ -145,6 +152,15 @@ export default async function AdminCustomerDetailPage({
     .eq("customer_account_id", customer.id)
     .maybeSingle();
 
+  const { data: documentRuleRows } = await supabase
+    .from("document_rules")
+    .select(
+      "id, document_name, match_features, file_name_rule, drive_folder_id, drive_folder_name, is_active, created_at",
+    )
+    .eq("customer_account_id", customer.id)
+    .order("created_at", { ascending: true });
+  const documentRules = documentRuleRows ?? [];
+
   return (
     <main className="admin-detail-shell">
       <header className="detail-header">
@@ -240,6 +256,77 @@ export default async function AdminCustomerDetailPage({
           errorDriveFolderId={customer.error_drive_folder_id}
           errorDriveFolderName={customer.error_drive_folder_name}
         />
+      </section>
+
+      <section className="settings-panel" aria-label="資料分類ルール">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Document Rules</p>
+            <h2>資料分類ルール</h2>
+            <p className="muted">
+              レシート以外の資料を判定し、指定したファイル名とGoogle Driveフォルダへ保存するためのルールです。
+            </p>
+          </div>
+          <a
+            className="secondary-action compact-action"
+            href={`/admin/customers/${customer.id}/document-rules.csv`}
+          >
+            <Download size={16} />
+            CSVダウンロード
+          </a>
+        </div>
+
+        <DocumentRuleForm customerId={customer.id} />
+
+        <div className="document-rule-list">
+          {documentRules.length === 0 ? (
+            <div className="empty-state">資料分類ルールはまだありません。</div>
+          ) : (
+            documentRules.map((rule) => (
+              <article className="document-rule-card" key={rule.id}>
+                <div>
+                  <div className="rule-title-row">
+                    <strong>{rule.document_name}</strong>
+                    <span className={rule.is_active ? "pill approved" : "pill pending"}>
+                      {rule.is_active ? "有効" : "無効"}
+                    </span>
+                  </div>
+                  <small>ファイル名ルール: {rule.file_name_rule}</small>
+                  {rule.match_features && (
+                    <small>特徴: {rule.match_features}</small>
+                  )}
+                  {(rule.drive_folder_name || rule.drive_folder_id) && (
+                    <small>
+                      保存先: {rule.drive_folder_name || "名称未設定"}
+                      {rule.drive_folder_id ? ` / ${rule.drive_folder_id}` : ""}
+                    </small>
+                  )}
+                </div>
+                <div className="rule-actions">
+                  <form action={toggleDocumentRule}>
+                    <input type="hidden" name="customerId" value={customer.id} />
+                    <input type="hidden" name="ruleId" value={rule.id} />
+                    <input
+                      type="hidden"
+                      name="isActive"
+                      value={String(rule.is_active)}
+                    />
+                    <button className="secondary-action compact-action" type="submit">
+                      {rule.is_active ? "無効化" : "有効化"}
+                    </button>
+                  </form>
+                  <form action={deleteDocumentRule}>
+                    <input type="hidden" name="customerId" value={customer.id} />
+                    <input type="hidden" name="ruleId" value={rule.id} />
+                    <button className="icon-button" type="submit" aria-label="削除">
+                      <Trash2 size={17} />
+                    </button>
+                  </form>
+                </div>
+              </article>
+            ))
+          )}
+        </div>
       </section>
 
       <section className="history-list" aria-label="顧客の送信履歴">

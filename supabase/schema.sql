@@ -24,6 +24,12 @@ exception
   when duplicate_object then null;
 end $$;
 
+do $$ begin
+  create type public.document_classification_status as enum ('pending', 'completed', 'failed');
+exception
+  when duplicate_object then null;
+end $$;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
@@ -68,6 +74,13 @@ create table if not exists public.submissions (
   drive_file_id text,
   drive_view_url text,
   thumbnail_url text,
+  document_classification_status public.document_classification_status not null default 'pending',
+  document_kind text,
+  document_rule_id uuid,
+  document_confidence numeric,
+  document_error text,
+  document_processed_at timestamptz,
+  document_drive_file_name text,
   ocr_status public.ocr_status not null default 'pending',
   ocr_error text,
   ocr_raw_response jsonb,
@@ -88,6 +101,13 @@ create table if not exists public.submissions (
 alter table public.submissions
   add column if not exists source_storage_path text,
   add column if not exists source_deleted_at timestamptz,
+  add column if not exists document_classification_status public.document_classification_status not null default 'pending',
+  add column if not exists document_kind text,
+  add column if not exists document_rule_id uuid,
+  add column if not exists document_confidence numeric,
+  add column if not exists document_error text,
+  add column if not exists document_processed_at timestamptz,
+  add column if not exists document_drive_file_name text,
   add column if not exists ocr_status public.ocr_status not null default 'pending',
   add column if not exists ocr_error text,
   add column if not exists ocr_raw_response jsonb,
@@ -120,6 +140,19 @@ create table if not exists public.mf_connections (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.document_rules (
+  id uuid primary key default gen_random_uuid(),
+  customer_account_id uuid not null references public.customer_accounts(id) on delete cascade,
+  document_name text not null,
+  match_features text,
+  file_name_rule text not null,
+  drive_folder_id text,
+  drive_folder_name text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists customer_accounts_user_id_idx
   on public.customer_accounts(user_id);
 
@@ -131,6 +164,9 @@ create index if not exists submissions_submitted_at_idx
 
 create index if not exists mf_connections_user_id_idx
   on public.mf_connections(user_id);
+
+create index if not exists document_rules_customer_account_id_idx
+  on public.document_rules(customer_account_id);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -157,11 +193,17 @@ create trigger mf_connections_set_updated_at
 before update on public.mf_connections
 for each row execute function public.set_updated_at();
 
+drop trigger if exists document_rules_set_updated_at on public.document_rules;
+create trigger document_rules_set_updated_at
+before update on public.document_rules
+for each row execute function public.set_updated_at();
+
 alter table public.profiles enable row level security;
 alter table public.customer_accounts enable row level security;
 alter table public.admin_users enable row level security;
 alter table public.submissions enable row level security;
 alter table public.mf_connections enable row level security;
+alter table public.document_rules enable row level security;
 
 grant usage on schema public to authenticated;
 grant select, insert, update on public.profiles to authenticated;
@@ -169,6 +211,7 @@ grant select, insert, update on public.customer_accounts to authenticated;
 grant select on public.admin_users to authenticated;
 grant select, insert, update on public.submissions to authenticated;
 grant select, insert, update, delete on public.mf_connections to authenticated;
+grant select, insert, update, delete on public.document_rules to authenticated;
 
 insert into storage.buckets (id, name, public)
 values ('receipt_uploads', 'receipt_uploads', false)
@@ -348,3 +391,37 @@ create policy "mf_connections_delete_own_or_admin"
 on public.mf_connections for delete
 to authenticated
 using (user_id = auth.uid() or public.is_admin());
+
+drop policy if exists "document_rules_select_own_or_admin" on public.document_rules;
+create policy "document_rules_select_own_or_admin"
+on public.document_rules for select
+to authenticated
+using (
+  public.is_admin()
+  or exists (
+    select 1
+    from public.customer_accounts ca
+    where ca.id = customer_account_id
+      and ca.user_id = auth.uid()
+      and ca.approval_status = 'approved'
+  )
+);
+
+drop policy if exists "document_rules_insert_admin" on public.document_rules;
+create policy "document_rules_insert_admin"
+on public.document_rules for insert
+to authenticated
+with check (public.is_admin());
+
+drop policy if exists "document_rules_update_admin" on public.document_rules;
+create policy "document_rules_update_admin"
+on public.document_rules for update
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "document_rules_delete_admin" on public.document_rules;
+create policy "document_rules_delete_admin"
+on public.document_rules for delete
+to authenticated
+using (public.is_admin());
