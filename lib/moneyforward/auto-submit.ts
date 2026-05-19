@@ -109,13 +109,9 @@ export async function submitReceiptToMoneyForward({
     accounts: accounts as never[],
     taxes: taxes as never[],
   });
-  const journalForPost =
-    process.env.MF_TEST_UNREALIZED_JOURNAL === "true"
-      ? { ...journal, is_realized: false }
-      : journal;
   const journalResponse = await postMoneyForwardJournal({
     accessToken,
-    journal: journalForPost,
+    journal,
   });
   const journalId = extractJournalId(journalResponse);
   const voucherResponse = await postMoneyForwardVouchers({
