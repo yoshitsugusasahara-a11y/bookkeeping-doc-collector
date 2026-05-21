@@ -65,6 +65,25 @@ function getMfStatusLabel(status?: string | null) {
   return "MF未送信";
 }
 
+function getDocumentClassificationStatusLabel(status?: string | null) {
+  if (status === "completed") return "分類済み";
+  if (status === "failed") return "分類失敗";
+  if (status === "skipped") return "分類対象外";
+  return "分類待ち";
+}
+
+function getDocumentKindLabel(kind?: string | null) {
+  if (kind === "receipt") return "領収書・レシート";
+  if (kind === "matched_document") return "登録ルールに一致";
+  if (kind === "unmatched_document") return "未分類";
+  return "未判定";
+}
+
+function formatConfidence(value?: number | null) {
+  if (typeof value !== "number") return "未取得";
+  return `${Math.round(value * 100)}%`;
+}
+
 export default async function ClientSubmissionsPage({
   params,
   searchParams,
@@ -98,11 +117,19 @@ export default async function ClientSubmissionsPage({
   const { data: submissionRows } = await supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", account.id)
     .order("submitted_at", { ascending: false });
   const submissions = submissionRows ?? [];
+
+  const { data: documentRuleRows } = await supabase
+    .from("document_rules")
+    .select("id, document_name")
+    .eq("customer_account_id", account.id);
+  const documentRuleNameById = new Map(
+    (documentRuleRows ?? []).map((rule) => [rule.id, rule.document_name]),
+  );
 
   return (
     <main className="app-frame">
@@ -191,6 +218,42 @@ export default async function ClientSubmissionsPage({
                     <span>{getOcrStatusLabel(item.ocr_status)}</span>
                     <span>{getMfStatusLabel(item.mf_status)}</span>
                   </div>
+
+                  <dl className="ocr-summary compact-summary">
+                    <div>
+                      <dt>資料分類</dt>
+                      <dd>
+                        {getDocumentClassificationStatusLabel(
+                          item.document_classification_status,
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>判定</dt>
+                      <dd>{getDocumentKindLabel(item.document_kind)}</dd>
+                    </div>
+                    <div>
+                      <dt>一致ルール</dt>
+                      <dd>
+                        {item.document_rule_id
+                          ? documentRuleNameById.get(item.document_rule_id) ||
+                            item.document_rule_id
+                          : "なし"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>信頼度</dt>
+                      <dd>{formatConfidence(item.document_confidence)}</dd>
+                    </div>
+                    <div>
+                      <dt>Drive保存名</dt>
+                      <dd>{item.document_drive_file_name || "未保存"}</dd>
+                    </div>
+                    <div>
+                      <dt>判定理由</dt>
+                      <dd>{item.document_error || "未取得"}</dd>
+                    </div>
+                  </dl>
 
                   <form
                     className={isSent ? "ocr-edit-form locked" : "ocr-edit-form"}

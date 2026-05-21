@@ -64,6 +64,25 @@ function getMfStatusLabel(status?: string | null) {
   return "MF送信待ち";
 }
 
+function getDocumentClassificationStatusLabel(status?: string | null) {
+  if (status === "completed") return "分類済み";
+  if (status === "failed") return "分類失敗";
+  if (status === "skipped") return "分類対象外";
+  return "分類待ち";
+}
+
+function getDocumentKindLabel(kind?: string | null) {
+  if (kind === "receipt") return "領収書・レシート";
+  if (kind === "matched_document") return "登録ルールに一致";
+  if (kind === "unmatched_document") return "未分類";
+  return "未判定";
+}
+
+function formatConfidence(value?: number | null) {
+  if (typeof value !== "number") return "未取得";
+  return `${Math.round(value * 100)}%`;
+}
+
 function formatAdminDateTime(value?: string | null) {
   if (!value) return "未取得";
   return new Intl.DateTimeFormat("ja-JP", {
@@ -140,7 +159,7 @@ export default async function AdminCustomerDetailPage({
   const { data: submissionRows } = await supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", customer.id)
     .order("submitted_at", { ascending: false });
@@ -160,6 +179,9 @@ export default async function AdminCustomerDetailPage({
     .eq("customer_account_id", customer.id)
     .order("created_at", { ascending: true });
   const documentRules = documentRuleRows ?? [];
+  const documentRuleNameById = new Map(
+    documentRules.map((rule) => [rule.id, rule.document_name]),
+  );
 
   return (
     <main className="admin-detail-shell">
@@ -386,6 +408,35 @@ export default async function AdminCustomerDetailPage({
                 )}
                 <dl className="ocr-summary">
                   <div>
+                    <dt>資料分類</dt>
+                    <dd>
+                      {getDocumentClassificationStatusLabel(
+                        item.document_classification_status,
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>判定</dt>
+                    <dd>{getDocumentKindLabel(item.document_kind)}</dd>
+                  </div>
+                  <div>
+                    <dt>一致ルール</dt>
+                    <dd>
+                      {item.document_rule_id
+                        ? documentRuleNameById.get(item.document_rule_id) ||
+                          item.document_rule_id
+                        : "なし"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>信頼度</dt>
+                    <dd>{formatConfidence(item.document_confidence)}</dd>
+                  </div>
+                  <div>
+                    <dt>Drive保存名</dt>
+                    <dd>{item.document_drive_file_name || "未保存"}</dd>
+                  </div>
+                  <div>
                     <dt>状態</dt>
                     <dd>{getOcrStatusLabel(item.ocr_status)}</dd>
                   </div>
@@ -430,6 +481,11 @@ export default async function AdminCustomerDetailPage({
                 </dl>
                 {item.ocr_error && (
                   <small className="warning-text">OCR: {item.ocr_error}</small>
+                )}
+                {item.document_error && (
+                  <small className="warning-text">
+                    Gemini分類: {item.document_error}
+                  </small>
                 )}
                 {item.mf_error && (
                   <small className="warning-text">MF: {item.mf_error}</small>
