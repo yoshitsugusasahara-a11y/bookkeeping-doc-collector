@@ -90,9 +90,21 @@ function formatRuleDate(value: string | null, fallback: string) {
 
   return {
     YYYY: year,
+    yyyy: year,
     YY: year.slice(-2),
+    yy: year.slice(-2),
     MM: month,
+    mm: month,
     DD: day,
+    dd: day,
+    YYYYMM: `${year}${month}`,
+    yyyymm: `${year}${month}`,
+    YYMM: `${year.slice(-2)}${month}`,
+    yymm: `${year.slice(-2)}${month}`,
+    YYYYMMDD: `${year}${month}${day}`,
+    yyyymmdd: `${year}${month}${day}`,
+    YYMMDD: `${year.slice(-2)}${month}${day}`,
+    yymmdd: `${year.slice(-2)}${month}${day}`,
   };
 }
 
@@ -110,9 +122,11 @@ function buildDocumentFileName({
   const dateParts = formatRuleDate(documentDate, submittedAt);
   let fileName = rule.file_name_rule;
 
-  Object.entries(dateParts).forEach(([token, value]) => {
+  Object.entries(dateParts)
+    .sort(([a], [b]) => b.length - a.length)
+    .forEach(([token, value]) => {
     fileName = fileName.replaceAll(token, value);
-  });
+    });
 
   if (!/\.[a-z0-9]{1,10}$/i.test(fileName)) {
     fileName += getOriginalExtension(originalFileName);
@@ -365,7 +379,7 @@ async function classifyAndFileNonReceiptIfNeeded({
   const isMatchedDocument =
     classification.kind === "matched_document" &&
     matchedRule &&
-    classification.confidence >= 0.75;
+    classification.confidence >= 0.6;
   const isReceipt = classification.kind === "receipt";
   const documentKind = isReceipt
     ? "receipt"

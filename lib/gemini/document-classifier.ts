@@ -114,8 +114,10 @@ function buildPrompt({
   return [
     "Return only a valid JSON object. Do not include Markdown fences, explanations, or extra text.",
     "Classify the uploaded bookkeeping document.",
-    "If the file is a receipt or receipt-like proof of payment, return kind = receipt.",
-    "If it is not a receipt, compare it with the document rules and return the best matching rule only when the match is reasonably clear.",
+    "Treat only receipts/領収書/レシート/payment receipts as kind = receipt.",
+    "Invoices, bills, direct debit notices, payroll statements, withholding tax reports, contracts, statements, and guidance letters are not receipts even when they contain dates and amounts.",
+    "If it is not a receipt, compare it with the document rules and return the best matching rule when the sender name, title, or distinctive text is visible.",
+    "For Japanese documents, use both the document title and issuer text. Examples: NTTファイナンス口座振替のご案内 should match a rule whose features include NTTファイナンス; リースサンキュー請求書 should match a rule whose features include リースサンキュー and 請求書.",
     "If no rule is clear, return kind = unmatched_document.",
     "Use confidence from 0 to 1. Use document_date in YYYY-MM-DD format when visible, otherwise null.",
     "",
