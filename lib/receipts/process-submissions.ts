@@ -135,6 +135,40 @@ function buildDocumentFileName({
   return sanitizeDriveFileName(fileName);
 }
 
+function normalizeForMatching(value: string | null | undefined) {
+  return (value || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+function findRuleMentionedInReason({
+  rules,
+  reason,
+}: {
+  rules: DocumentRule[];
+  reason: string | null;
+}) {
+  const normalizedReason = normalizeForMatching(reason);
+  if (!normalizedReason) return null;
+
+  return (
+    rules.find((rule) => {
+      const ruleName = normalizeForMatching(rule.document_name);
+      if (ruleName && normalizedReason.includes(ruleName)) return true;
+
+      const features = normalizeForMatching(rule.match_features);
+      if (!features) return false;
+
+      return features
+        .split(/[、,・/／]+/)
+        .map((feature) => feature.trim())
+        .filter((feature) => feature.length >= 2)
+        .some((feature) => normalizedReason.includes(feature));
+    }) ?? null
+  );
+}
+
 async function getCustomerDriveSettings({
   supabase,
   customerId,
@@ -373,11 +407,19 @@ async function classifyAndFileNonReceiptIfNeeded({
   }
 
   const classification = outcome.result;
-  const matchedRule = classification.matched_rule_id
+  const explicitMatchedRule = classification.matched_rule_id
     ? rules.find((rule) => rule.id === classification.matched_rule_id) ?? null
     : null;
+  const inferredMatchedRule =
+    !explicitMatchedRule && classification.confidence >= 0.85
+      ? findRuleMentionedInReason({
+          rules,
+          reason: classification.reason,
+        })
+      : null;
+  const matchedRule = explicitMatchedRule || inferredMatchedRule;
   const isMatchedDocument =
-    classification.kind === "matched_document" &&
+    classification.kind !== "receipt" &&
     matchedRule &&
     classification.confidence >= 0.6;
   const isReceipt = classification.kind === "receipt";
