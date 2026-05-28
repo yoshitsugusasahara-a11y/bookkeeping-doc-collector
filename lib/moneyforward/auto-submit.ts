@@ -43,6 +43,7 @@ export async function submitReceiptToMoneyForward({
   mimeType,
   transactionNote,
   ocr,
+  customerJournalPrompt = null,
 }: {
   supabase: SupabaseClient<Database>;
   customerAccountId: string;
@@ -52,6 +53,7 @@ export async function submitReceiptToMoneyForward({
   mimeType: string;
   transactionNote: string;
   ocr: ReceiptOcrResult;
+  customerJournalPrompt?: string | null;
 }) {
   const { data: connection } = await supabase
     .from("mf_connections")
@@ -106,6 +108,7 @@ export async function submitReceiptToMoneyForward({
     transactionNote,
     voucherFileName,
     submissionTimestampLabel: formatSubmittedAt(submittedAt),
+    customerJournalPrompt,
     accounts: accounts as never[],
     taxes: taxes as never[],
   });

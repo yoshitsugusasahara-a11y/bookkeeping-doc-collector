@@ -45,6 +45,7 @@ export type Database = {
           drive_folder_name: string | null;
           error_drive_folder_id: string | null;
           error_drive_folder_name: string | null;
+          journal_prompt: string | null;
           approved_at: string | null;
           created_at: string;
           updated_at: string;
@@ -59,6 +60,7 @@ export type Database = {
           drive_folder_name?: string | null;
           error_drive_folder_id?: string | null;
           error_drive_folder_name?: string | null;
+          journal_prompt?: string | null;
           approved_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -73,6 +75,7 @@ export type Database = {
           drive_folder_name?: string | null;
           error_drive_folder_id?: string | null;
           error_drive_folder_name?: string | null;
+          journal_prompt?: string | null;
           approved_at?: string | null;
           created_at?: string;
           updated_at?: string;

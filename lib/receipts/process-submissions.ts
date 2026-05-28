@@ -48,6 +48,7 @@ type CustomerDriveSettings = {
   id: string;
   drive_folder_id: string | null;
   error_drive_folder_id: string | null;
+  journal_prompt: string | null;
 };
 
 type DocumentRule = DocumentRuleForClassification & {
@@ -178,7 +179,7 @@ async function getCustomerDriveSettings({
 }) {
   const { data: customer, error } = await supabase
     .from("customer_accounts")
-    .select("id, drive_folder_id, error_drive_folder_id")
+    .select("id, drive_folder_id, error_drive_folder_id, journal_prompt")
     .eq("id", customerId)
     .maybeSingle();
 
@@ -607,6 +608,7 @@ export async function processSubmissionToMoneyForward({
       mimeType: submission.mime_type,
       transactionNote: submission.transaction_note,
       ocr,
+      customerJournalPrompt: customer.journal_prompt,
     });
 
     if (driveFileId) {

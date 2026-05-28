@@ -19,6 +19,7 @@ import {
 } from "./actions";
 import { DocumentRuleForm } from "./document-rule-form";
 import { DriveSettingsForm } from "./drive-settings-form";
+import { JournalPromptForm } from "./journal-prompt-form";
 import { MfProcessForm } from "./mf-process-form";
 
 function getFileTypeLabel(mimeType: string) {
@@ -133,7 +134,7 @@ export default async function AdminCustomerDetailPage({
   const { data: customer } = await supabase
     .from("customer_accounts")
     .select(
-      "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, created_at",
+      "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, journal_prompt, created_at",
     )
     .eq("id", customerId)
     .maybeSingle();
@@ -277,6 +278,20 @@ export default async function AdminCustomerDetailPage({
           driveFolderName={customer.drive_folder_name}
           errorDriveFolderId={customer.error_drive_folder_id}
           errorDriveFolderName={customer.error_drive_folder_name}
+        />
+      </section>
+
+      <section className="settings-panel" aria-label="仕訳生成指示">
+        <div>
+          <p className="eyebrow">Journal Prompt</p>
+          <h2>仕訳生成指示</h2>
+          <p className="muted">
+            レシート・領収書からMF仕訳を作成するときに、勘定科目、補助科目、摘要、タグの判断へ反映する指示です。
+          </p>
+        </div>
+        <JournalPromptForm
+          customerId={customer.id}
+          journalPrompt={customer.journal_prompt}
         />
       </section>
 

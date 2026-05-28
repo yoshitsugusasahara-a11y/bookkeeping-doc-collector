@@ -188,11 +188,49 @@ function buildRemark({
     .slice(0, 200);
 }
 
+function ensureVoucherFileNameInRemark({
+  remark,
+  fallbackRemark,
+  voucherFileName,
+}: {
+  remark: string | null | undefined;
+  fallbackRemark: string;
+  voucherFileName: string;
+}) {
+  const baseRemark =
+    typeof remark === "string" && remark.trim().length > 0
+      ? remark.trim()
+      : fallbackRemark;
+  const remarkWithFileName = baseRemark.includes(voucherFileName)
+    ? baseRemark
+    : `${baseRemark} ${voucherFileName}`;
+
+  return remarkWithFileName.replace(/\s+/g, " ").slice(0, 200);
+}
+
+function normalizeTags({
+  tags,
+  allowAdditionalTags,
+}: {
+  tags: string[];
+  allowAdditionalTags: boolean;
+}) {
+  const tagList = allowAdditionalTags
+    ? ["AI", ...tags.filter((tag) => tag !== "AI")]
+    : ["AI"];
+
+  return Array.from(new Set(tagList))
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
 function buildPrompt({
   ocr,
   transactionNote,
   voucherFileName,
   submissionTimestampLabel,
+  customerJournalPrompt,
   accounts,
   taxes,
 }: {
@@ -200,9 +238,14 @@ function buildPrompt({
   transactionNote: string;
   voucherFileName: string;
   submissionTimestampLabel: string;
+  customerJournalPrompt: string | null;
   accounts: MfAccountOption[];
   taxes: MfTaxOption[];
 }) {
+  const hasCustomerPrompt =
+    typeof customerJournalPrompt === "string" &&
+    customerJournalPrompt.trim().length > 0;
+
   return [
     "あなたは日本の会計実務に詳しい記帳代行アシスタントです。",
     "領収書OCR結果とユーザー入力から、Money Forward Cloud Accounting APIの /api/v3/journals に渡す journal JSONだけを返してください。",
@@ -212,6 +255,10 @@ function buildPrompt({
     "貸方は支払方法に応じて現金またはクレジットカード等に近い科目を選んでください。見つからない場合は、もっとも近い資産/負債科目を選んでください。",
     "借方は取引内容と店舗名から最も自然な費用科目を選んでください。",
     "摘要 remark には店舗名、取引内容、ファイル名を短く含めてください。",
+    "顧客別の仕訳生成指示がある場合は、勘定科目、補助科目、摘要、タグの判断に反映してください。",
+    "ただし、利用可能な勘定科目ID、補助科目ID、税区分IDに存在しない値は絶対に使わないでください。",
+    "顧客別指示にタグ指定がある場合は tags に追加してください。ただし AI タグは必ず含めてください。",
+    "摘要 remark には、顧客別指示を反映しても添付ファイル名を必ず含めてください。",
     "金額は税込合計額を value に入れてください。",
     "invoice_kind は送信しないでください。",
     "返答形式はJSONのみです。",
@@ -220,7 +267,10 @@ function buildPrompt({
     `ユーザー入力: ${transactionNote}`,
     `添付ファイル名: ${voucherFileName}`,
     `メモに入れる送信日時: ${submissionTimestampLabel}`,
-    'タグは必ず ["AI"] にしてください。',
+    hasCustomerPrompt
+      ? `顧客別の仕訳生成指示: ${customerJournalPrompt}`
+      : "顧客別の仕訳生成指示: なし",
+    'タグには必ず "AI" を含めてください。',
     `勘定科目候補: ${JSON.stringify(accounts.slice(0, 200))}`,
     `税区分候補: ${JSON.stringify(taxes.slice(0, 120))}`,
     "",
@@ -233,6 +283,7 @@ export async function generateMfJournalWithGemini({
   transactionNote,
   voucherFileName,
   submissionTimestampLabel,
+  customerJournalPrompt = null,
   accounts,
   taxes,
 }: {
@@ -240,6 +291,7 @@ export async function generateMfJournalWithGemini({
   transactionNote: string;
   voucherFileName: string;
   submissionTimestampLabel: string;
+  customerJournalPrompt?: string | null;
   accounts: MfAccountOption[];
   taxes: MfTaxOption[];
 }) {
@@ -275,6 +327,7 @@ export async function generateMfJournalWithGemini({
                       transactionNote,
                       voucherFileName,
                       submissionTimestampLabel,
+                      customerJournalPrompt,
                       accounts,
                       taxes,
                     }),
@@ -307,14 +360,26 @@ export async function generateMfJournalWithGemini({
 
       const journal = normalizeJournalPayload(JSON.parse(extractJson(text)));
       const remark = buildRemark({ ocr, transactionNote, voucherFileName });
+      const hasCustomerPrompt =
+        typeof customerJournalPrompt === "string" &&
+        customerJournalPrompt.trim().length > 0;
 
       return {
         ...journal,
         memo: submissionTimestampLabel.slice(0, 200),
-        tags: ["AI"],
+        tags: normalizeTags({
+          tags: journal.tags || [],
+          allowAdditionalTags: hasCustomerPrompt,
+        }),
         branches: journal.branches.map((branch) => ({
           ...branch,
-          remark,
+          remark: hasCustomerPrompt
+            ? ensureVoucherFileNameInRemark({
+                remark: branch.remark,
+                fallbackRemark: remark,
+                voucherFileName,
+              })
+            : remark,
         })),
       };
     } catch (error) {

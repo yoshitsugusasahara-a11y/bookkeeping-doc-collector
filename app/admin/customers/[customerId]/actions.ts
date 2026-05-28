@@ -9,6 +9,11 @@ export type DriveSettingsState = {
   message: string;
 };
 
+export type JournalPromptState = {
+  status: "idle" | "success" | "error";
+  message: string;
+};
+
 async function ensureAdmin() {
   const supabase = await createClient();
   const { data: isAdmin, error } = await supabase.rpc("is_admin");
@@ -81,6 +86,37 @@ export async function createDocumentRule(formData: FormData) {
   });
 
   revalidatePath(`/admin/customers/${customerId}`);
+}
+
+export async function updateCustomerJournalPrompt(
+  _prevState: JournalPromptState,
+  formData: FormData,
+): Promise<JournalPromptState> {
+  const customerId = String(formData.get("customerId") || "");
+  const journalPrompt = String(formData.get("journalPrompt") || "").trim();
+
+  if (!customerId) {
+    return { status: "error", message: "顧客情報を取得できませんでした。" };
+  }
+
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  const { error } = await supabase
+    .from("customer_accounts")
+    .update({
+      journal_prompt: journalPrompt || null,
+    })
+    .eq("id", customerId);
+
+  if (error) {
+    return { status: "error", message: "仕訳生成指示を保存できませんでした。" };
+  }
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  return { status: "success", message: "仕訳生成指示を保存しました。" };
 }
 
 export async function toggleDocumentRule(formData: FormData) {

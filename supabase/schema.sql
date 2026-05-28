@@ -49,6 +49,7 @@ create table if not exists public.customer_accounts (
   drive_folder_name text,
   error_drive_folder_id text,
   error_drive_folder_name text,
+  journal_prompt text,
   approved_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -125,7 +126,8 @@ alter table public.submissions
 
 alter table public.customer_accounts
   add column if not exists error_drive_folder_id text,
-  add column if not exists error_drive_folder_name text;
+  add column if not exists error_drive_folder_name text,
+  add column if not exists journal_prompt text;
 
 create table if not exists public.mf_connections (
   id uuid primary key default gen_random_uuid(),
