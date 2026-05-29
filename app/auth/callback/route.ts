@@ -44,6 +44,13 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.redirect(new URL(safeNext, requestUrl.origin));
     }
+
+    console.error("Supabase OAuth callback failed", {
+      message: error.message,
+      code: error.code,
+      status: error.status,
+      next: safeNext,
+    });
   }
 
   const errorUrl = new URL("/auth/error", requestUrl.origin);
