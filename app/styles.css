@@ -52,8 +52,28 @@ button {
 }
 
 button:disabled {
-  cursor: progress;
+  cursor: not-allowed;
   opacity: 0.72;
+}
+
+.disabled-action {
+  background: #88a996;
+}
+
+.loading-panel {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  color: var(--muted);
+  display: flex;
+  font-weight: 800;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 24px;
+  min-height: 140px;
+  padding: 24px;
 }
 
 .spin-icon {

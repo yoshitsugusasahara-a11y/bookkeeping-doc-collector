@@ -23,8 +23,17 @@ function SaveButton({ disabled }: { disabled: boolean }) {
 function MfSendButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
 
+  if (disabled) {
+    return (
+      <button className="primary-action compact disabled-action" type="button" disabled>
+        <Send size={15} />
+        MF送信不可
+      </button>
+    );
+  }
+
   return (
-    <button className="primary-action compact" type="submit" disabled={disabled || pending}>
+    <button className="primary-action compact" type="submit" disabled={pending}>
       {pending ? (
         <>
           <Loader2 className="spin-icon" size={15} />

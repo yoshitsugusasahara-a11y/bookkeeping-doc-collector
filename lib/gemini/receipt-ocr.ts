@@ -3,6 +3,7 @@ export type ReceiptOcrResult = {
   amount: number | null;
   store: string | null;
   summary: string | null;
+  payment_method: "cash" | "credit_card" | "cashless";
   is_credit_card: boolean | null;
 };
 
@@ -73,6 +74,15 @@ function normalizeOcrResult(value: unknown): ReceiptOcrResult {
         ? Number.parseInt(record.amount.replace(/[^\d-]/g, ""), 10)
         : null;
 
+  const paymentMethod =
+    record.payment_method === "credit_card" ||
+    record.payment_method === "cashless" ||
+    record.payment_method === "cash"
+      ? record.payment_method
+      : record.is_credit_card === true
+        ? "credit_card"
+        : "cash";
+
   return {
     date: typeof record.date === "string" && record.date ? record.date : null,
     amount: Number.isFinite(amount) ? amount : null,
@@ -81,10 +91,8 @@ function normalizeOcrResult(value: unknown): ReceiptOcrResult {
       typeof record.summary === "string" && record.summary
         ? record.summary.slice(0, 15)
         : null,
-    is_credit_card:
-      typeof record.is_credit_card === "boolean"
-        ? record.is_credit_card
-        : null,
+    payment_method: paymentMethod,
+    is_credit_card: paymentMethod === "credit_card",
   };
 }
 
@@ -134,14 +142,14 @@ export async function analyzeReceiptWithGemini({
                     "Return only a valid JSON object. Do not include Markdown fences, explanations, or extra text.",
                     "The amount must be an integer number without commas or currency symbols.",
                     "The summary must be a concise Japanese description within 15 characters.",
-                    "Set is_credit_card to true when the receipt mentions Visa, Master, JCB, AMEX, credit sale, card payment, card, or transportation IC. Set it to false for cash. Use null only when unknown.",
+                    "Return payment_method as one of cash, credit_card, or cashless. Use cash when unknown. Use credit_card only for credit card payment. Use cashless for e-money, QR code payment, IC card, debit, or other non-cash payment.",
                     "あなたは日本の領収書・レシートを読み取るOCRアシスタントです。",
                     "添付画像またはPDFから、以下のJSONだけを返してください。",
                     "推測が難しい項目は null にしてください。金額は税込合計を整数で返してください。",
                     "日付は YYYY-MM-DD 形式にしてください。年が不明な場合は null にしてください。",
-                    "支払方法がクレジットカード、カード、VISA、Mastercard、JCB、AMEX、交通系IC等なら is_credit_card を true、現金なら false、不明なら null にしてください。",
+                    "支払方法は payment_method に cash / credit_card / cashless のいずれかで返してください。不明な場合は cash としてください。クレジットカードは credit_card、電子マネー・QR決済・交通系IC・デビット等は cashless としてください。",
                     `ユーザー入力の取引内容: ${transactionNote}`,
-                    '返却形式: { "date": "YYYY-MM-DD", "amount": 1500, "store": "店舗名", "summary": "購入品目要約", "is_credit_card": true }',
+                    '返却形式: { "date": "YYYY-MM-DD", "amount": 1500, "store": "店舗名", "summary": "購入品目要約", "payment_method": "cash" }',
                   ].join("\n"),
                 },
                 {

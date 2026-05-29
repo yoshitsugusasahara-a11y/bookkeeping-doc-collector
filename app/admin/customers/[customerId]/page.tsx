@@ -65,6 +65,13 @@ function getMfStatusLabel(status?: string | null) {
   return "MF送信待ち";
 }
 
+function getPaymentMethodLabel(method?: string | null, isCreditCard?: boolean | null) {
+  if (method === "credit_card") return "クレジット払い";
+  if (method === "cashless") return "キャッシュレス等";
+  if (method === "cash") return "現金";
+  return isCreditCard ? "クレジット払い" : "現金";
+}
+
 function getDocumentClassificationStatusLabel(status?: string | null) {
   if (status === "completed") return "分類済み";
   if (status === "failed") return "分類失敗";
@@ -160,7 +167,7 @@ export default async function AdminCustomerDetailPage({
   const { data: submissionRows } = await supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", customer.id)
     .order("submitted_at", { ascending: false });
@@ -473,13 +480,7 @@ export default async function AdminCustomerDetailPage({
                   </div>
                   <div>
                     <dt>支払方法</dt>
-                    <dd>
-                      {item.ocr_is_credit_card === null
-                        ? "未取得"
-                        : item.ocr_is_credit_card
-                          ? "クレカ等"
-                          : "現金"}
-                    </dd>
+                    <dd>{getPaymentMethodLabel(item.ocr_payment_method, item.ocr_is_credit_card)}</dd>
                   </div>
                   <div>
                     <dt>MF送信</dt>

@@ -50,13 +50,25 @@ function parseCreditCard(value: FormDataEntryValue | null) {
   return null;
 }
 
+function parsePaymentMethod(value: FormDataEntryValue | null) {
+  if (value === "credit_card" || value === "cashless" || value === "cash") {
+    return value;
+  }
+  return "cash";
+}
+
 export async function updateSubmissionOcr(clientSlug: string, formData: FormData) {
   const submissionId = String(formData.get("submissionId") || "");
   const ocrDate = String(formData.get("ocrDate") || "").trim() || null;
   const ocrAmount = parseAmount(formData.get("ocrAmount"));
   const ocrStore = String(formData.get("ocrStore") || "").trim() || null;
   const ocrSummary = String(formData.get("ocrSummary") || "").trim() || null;
-  const ocrIsCreditCard = parseCreditCard(formData.get("ocrIsCreditCard"));
+  const legacyCreditCard = parseCreditCard(formData.get("ocrIsCreditCard"));
+  const ocrPaymentMethod = parsePaymentMethod(formData.get("ocrPaymentMethod"));
+  const ocrIsCreditCard =
+    formData.has("ocrPaymentMethod")
+      ? ocrPaymentMethod === "credit_card"
+      : legacyCreditCard;
 
   if (!submissionId) return;
 
@@ -83,6 +95,7 @@ export async function updateSubmissionOcr(clientSlug: string, formData: FormData
       ocr_amount: ocrAmount,
       ocr_store: ocrStore,
       ocr_summary: ocrSummary,
+      ocr_payment_method: ocrPaymentMethod,
       ocr_is_credit_card: ocrIsCreditCard,
       mf_status: "not_sent",
       mf_error: null,

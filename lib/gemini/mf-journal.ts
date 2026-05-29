@@ -290,6 +290,7 @@ function buildPrompt({
     "invoice_kind は送信しないでください。",
     "返答形式はJSONのみです。",
     "",
+    "OCR payment_method means cash=現金, credit_card=クレジット払い, cashless=キャッシュレス等です。貸方科目はこの支払方法を優先して選んでください。",
     `OCR: ${JSON.stringify(ocr)}`,
     `ユーザー入力: ${transactionNote}`,
     `添付ファイル名: ${voucherFileName}`,

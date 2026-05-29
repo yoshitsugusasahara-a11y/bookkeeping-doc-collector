@@ -33,7 +33,7 @@ export function GoogleLoginButton({
     });
 
     if (error) {
-      setErrorMessage("ログインを開始できませんでした。設定を確認してください。");
+      setErrorMessage("ログインを開始できませんでした。時間をおいて再度お試しください。");
       setIsLoading(false);
     }
   }
