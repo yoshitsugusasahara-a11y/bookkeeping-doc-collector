@@ -344,7 +344,10 @@ export default async function ClientSubmissionsPage({
                     action={sendSubmissionToMoneyForward.bind(null, clientSlug)}
                   >
                     <input type="hidden" name="submissionId" value={item.id} />
-                    <MoneyForwardSendButton disabled={!canSendToMf} />
+                    <MoneyForwardSendButton
+                      disabled={!canSendToMf}
+                      completed={item.mf_status === "sent"}
+                    />
                   </form>
                 </div>
 
