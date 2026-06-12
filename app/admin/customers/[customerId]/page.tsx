@@ -7,8 +7,6 @@ import {
   FileText,
   ImageIcon,
   Link2Off,
-  PauseCircle,
-  RotateCcw,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
@@ -24,6 +22,7 @@ import {
   resumeCustomerAccount,
   suspendCustomerAccount,
 } from "../actions";
+import { CustomerAccountActionButton } from "../customer-account-action-button";
 import { DocumentRuleForm } from "./document-rule-form";
 import { DriveSettingsForm } from "./drive-settings-form";
 import { JournalPromptForm } from "./journal-prompt-form";
@@ -256,20 +255,20 @@ export default async function AdminCustomerDetailPage({
           {isApproved && (
             <form action={suspendCustomerAccount}>
               <input type="hidden" name="accountId" value={customer.id} />
-              <button className="danger-action" type="submit">
-                <PauseCircle size={18} />
-                利用停止
-              </button>
+              <CustomerAccountActionButton
+                action="suspend"
+                className="danger-action"
+              />
             </form>
           )}
           {isSuspended && (
             <>
               <form action={resumeCustomerAccount}>
                 <input type="hidden" name="accountId" value={customer.id} />
-                <button className="primary-action" type="submit">
-                  <RotateCcw size={18} />
-                  利用再開
-                </button>
+                <CustomerAccountActionButton
+                  action="resume"
+                  className="primary-action"
+                />
               </form>
               <form className="delete-confirm-form" action={deleteCustomerAccount}>
                 <input type="hidden" name="accountId" value={customer.id} />
@@ -282,10 +281,10 @@ export default async function AdminCustomerDetailPage({
                   />
                   削除することを確認
                 </label>
-                <button className="danger-action" type="submit">
-                  <Trash2 size={18} />
-                  顧客を削除
-                </button>
+                <CustomerAccountActionButton
+                  action="delete"
+                  className="danger-action"
+                />
               </form>
             </>
           )}

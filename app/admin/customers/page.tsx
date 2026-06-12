@@ -1,13 +1,9 @@
 import Link from "next/link";
 import {
   AlertTriangle,
-  Check,
   ExternalLink,
-  PauseCircle,
-  RotateCcw,
   Search,
   ShieldCheck,
-  Trash2,
 } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -18,6 +14,7 @@ import {
   resumeCustomerAccount,
   suspendCustomerAccount,
 } from "./actions";
+import { CustomerAccountActionButton } from "./customer-account-action-button";
 import { CustomerUrlBuilder, CustomerUrlTools } from "./customer-url-builder";
 
 type CustomerRow = {
@@ -288,10 +285,10 @@ export default async function AdminCustomersPage() {
                         name="accountId"
                         value={customer.id}
                       />
-                      <button className="small-button" type="submit">
-                        <Check size={16} />
-                        承認
-                      </button>
+                      <CustomerAccountActionButton
+                        action="approve"
+                        className="small-button"
+                      />
                     </form>
                   )}
                   {isApproved && (
@@ -301,10 +298,10 @@ export default async function AdminCustomersPage() {
                         name="accountId"
                         value={customer.id}
                       />
-                      <button className="danger-action compact-action" type="submit">
-                        <PauseCircle size={16} />
-                        利用停止
-                      </button>
+                      <CustomerAccountActionButton
+                        action="suspend"
+                        className="danger-action compact-action"
+                      />
                     </form>
                   )}
                   {isSuspended && (
@@ -315,10 +312,10 @@ export default async function AdminCustomersPage() {
                           name="accountId"
                           value={customer.id}
                         />
-                        <button className="small-button" type="submit">
-                          <RotateCcw size={16} />
-                          利用再開
-                        </button>
+                        <CustomerAccountActionButton
+                          action="resume"
+                          className="small-button"
+                        />
                       </form>
                       <form
                         className="delete-confirm-form"
@@ -338,10 +335,10 @@ export default async function AdminCustomersPage() {
                           />
                           確認
                         </label>
-                        <button className="danger-action compact-action" type="submit">
-                          <Trash2 size={16} />
-                          削除
-                        </button>
+                        <CustomerAccountActionButton
+                          action="delete"
+                          className="danger-action compact-action"
+                        />
                       </form>
                     </>
                   )}
