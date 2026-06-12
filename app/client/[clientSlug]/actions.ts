@@ -44,10 +44,10 @@ function parseAmount(value: FormDataEntryValue | null) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function parseCreditCard(value: FormDataEntryValue | null) {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  return null;
+function parsePaymentMethod(value: FormDataEntryValue | null) {
+  if (value === "credit_card") return "credit_card";
+  if (value === "cashless") return "cashless";
+  return "cash";
 }
 
 export async function updateSubmissionOcr(clientSlug: string, formData: FormData) {
@@ -56,7 +56,7 @@ export async function updateSubmissionOcr(clientSlug: string, formData: FormData
   const ocrAmount = parseAmount(formData.get("ocrAmount"));
   const ocrStore = String(formData.get("ocrStore") || "").trim() || null;
   const ocrSummary = String(formData.get("ocrSummary") || "").trim() || null;
-  const ocrIsCreditCard = parseCreditCard(formData.get("ocrIsCreditCard"));
+  const ocrPaymentMethod = parsePaymentMethod(formData.get("ocrPaymentMethod"));
 
   if (!submissionId) return;
 
@@ -83,7 +83,8 @@ export async function updateSubmissionOcr(clientSlug: string, formData: FormData
       ocr_amount: ocrAmount,
       ocr_store: ocrStore,
       ocr_summary: ocrSummary,
-      ocr_is_credit_card: ocrIsCreditCard,
+      ocr_payment_method: ocrPaymentMethod,
+      ocr_is_credit_card: ocrPaymentMethod === "credit_card",
       mf_status: "not_sent",
       mf_error: null,
     })

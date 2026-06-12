@@ -135,6 +135,7 @@ export type Database = {
           ocr_amount: number | null;
           ocr_store: string | null;
           ocr_summary: string | null;
+          ocr_payment_method: "cash" | "credit_card" | "cashless";
           ocr_is_credit_card: boolean | null;
           mf_status: MfSubmissionStatus;
           mf_error: string | null;
@@ -171,6 +172,7 @@ export type Database = {
           ocr_amount?: number | null;
           ocr_store?: string | null;
           ocr_summary?: string | null;
+          ocr_payment_method?: "cash" | "credit_card" | "cashless";
           ocr_is_credit_card?: boolean | null;
           mf_status?: MfSubmissionStatus;
           mf_error?: string | null;
@@ -207,6 +209,7 @@ export type Database = {
           ocr_amount?: number | null;
           ocr_store?: string | null;
           ocr_summary?: string | null;
+          ocr_payment_method?: "cash" | "credit_card" | "cashless";
           ocr_is_credit_card?: boolean | null;
           mf_status?: MfSubmissionStatus;
           mf_error?: string | null;

@@ -3,6 +3,7 @@ export type ReceiptOcrResult = {
   amount: number | null;
   store: string | null;
   summary: string | null;
+  payment_method: "cash" | "credit_card" | "cashless";
   is_credit_card: boolean | null;
 };
 
@@ -73,6 +74,19 @@ function normalizeOcrResult(value: unknown): ReceiptOcrResult {
         ? Number.parseInt(record.amount.replace(/[^\d-]/g, ""), 10)
         : null;
 
+  const rawPaymentMethod =
+    typeof record.payment_method === "string" ? record.payment_method : null;
+  const paymentMethod =
+    rawPaymentMethod === "credit_card"
+      ? "credit_card"
+      : rawPaymentMethod === "cashless"
+        ? "cashless"
+        : "cash";
+  const isCreditCard =
+    typeof record.is_credit_card === "boolean"
+      ? record.is_credit_card
+      : paymentMethod === "credit_card";
+
   return {
     date: typeof record.date === "string" && record.date ? record.date : null,
     amount: Number.isFinite(amount) ? amount : null,
@@ -81,10 +95,8 @@ function normalizeOcrResult(value: unknown): ReceiptOcrResult {
       typeof record.summary === "string" && record.summary
         ? record.summary.slice(0, 15)
         : null,
-    is_credit_card:
-      typeof record.is_credit_card === "boolean"
-        ? record.is_credit_card
-        : null,
+    payment_method: paymentMethod,
+    is_credit_card: paymentMethod === "credit_card" && isCreditCard,
   };
 }
 
@@ -134,6 +146,7 @@ export async function analyzeReceiptWithGemini({
                     "Return only a valid JSON object. Do not include Markdown fences, explanations, or extra text.",
                     "The amount must be an integer number without commas or currency symbols.",
                     "The summary must be a concise Japanese description within 15 characters.",
+                    "Return payment_method as exactly one of cash, credit_card, cashless. Use cash when the payment method is unclear.",
                     "Set is_credit_card to true when the receipt mentions Visa, Master, JCB, AMEX, credit sale, card payment, card, or transportation IC. Set it to false for cash. Use null only when unknown.",
                     "あなたは日本の領収書・レシートを読み取るOCRアシスタントです。",
                     "添付画像またはPDFから、以下のJSONだけを返してください。",
