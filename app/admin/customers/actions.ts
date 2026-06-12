@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 
@@ -18,14 +17,6 @@ async function ensureAdmin() {
   }
 
   return supabase;
-}
-
-function tryCreateAdminClient() {
-  try {
-    return createAdminClient();
-  } catch {
-    return null;
-  }
 }
 
 async function removeStorageFiles({
@@ -121,12 +112,9 @@ export async function deleteCustomerAccount(formData: FormData) {
   const supabase = await ensureAdmin();
   if (!supabase) return;
 
-  const adminSupabase = tryCreateAdminClient();
-  const mutationClient = adminSupabase ?? supabase;
-
   const { data: customer } = await supabase
     .from("customer_accounts")
-    .select("id, user_id")
+    .select("id")
     .eq("id", accountId)
     .maybeSingle();
 
@@ -142,53 +130,17 @@ export async function deleteCustomerAccount(formData: FormData) {
     .not("source_storage_path", "is", null);
 
   await removeStorageFiles({
-    supabase: mutationClient,
+    supabase,
     paths:
       sourceRows
         ?.map((row) => row.source_storage_path)
         .filter((path): path is string => Boolean(path)) ?? [],
   });
 
-  await mutationClient
+  await supabase
     .from("customer_accounts")
     .delete()
     .eq("id", accountId);
-
-  if (adminSupabase) {
-    const [{ data: remainingAccounts }, { data: profile }, { data: adminUser }] =
-      await Promise.all([
-        adminSupabase
-          .from("customer_accounts")
-          .select("id")
-          .eq("user_id", customer.user_id)
-          .limit(1),
-        adminSupabase
-          .from("profiles")
-          .select("email, role")
-          .eq("id", customer.user_id)
-          .maybeSingle(),
-        adminSupabase
-          .from("admin_users")
-          .select("id")
-          .eq("user_id", customer.user_id)
-          .maybeSingle(),
-      ]);
-
-    const canDeleteAuthUser =
-      !remainingAccounts?.length &&
-      profile?.role !== "admin" &&
-      !adminUser;
-
-    if (canDeleteAuthUser) {
-      const { error } = await adminSupabase.auth.admin.deleteUser(
-        customer.user_id,
-      );
-
-      if (error) {
-        console.error("Failed to delete Supabase auth user", error);
-      }
-    }
-  }
 
   revalidatePath("/admin/customers");
   redirect("/admin/customers");

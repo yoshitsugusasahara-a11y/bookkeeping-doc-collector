@@ -151,13 +151,33 @@ export default async function AdminCustomerDetailPage({
     );
   }
 
-  const { data: customer } = await supabase
+  const { data: customer, error: customerError } = await supabase
     .from("customer_accounts")
     .select(
       "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, journal_prompt, submission_retention_limit, created_at",
     )
     .eq("id", customerId)
     .maybeSingle();
+
+  if (customerError) {
+    console.error("Failed to fetch admin customer detail", customerError);
+
+    return (
+      <main className="app-frame">
+        <Link className="text-link" href="/admin/customers">
+          <ArrowLeft size={16} />
+          顧客一覧へ戻る
+        </Link>
+        <section className="empty-state">
+          <h1>顧客情報の取得に失敗しました</h1>
+          <p>
+            データベースの設定とアプリの項目が一致していない可能性があります。
+          </p>
+          <p className="muted">{customerError.message}</p>
+        </section>
+      </main>
+    );
+  }
 
   if (!customer) {
     return (
