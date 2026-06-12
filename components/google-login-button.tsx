@@ -21,6 +21,8 @@ export function GoogleLoginButton({
     setErrorMessage("");
 
     const supabase = createClient();
+    await supabase.auth.signOut();
+
     const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(
       nextPath,
     )}`;
@@ -29,11 +31,14 @@ export function GoogleLoginButton({
       provider: "google",
       options: {
         redirectTo,
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
 
     if (error) {
-      setErrorMessage("ログインを開始できませんでした。設定を確認してください。");
+      setErrorMessage("ログインを開始できませんでした。時間をおいて再度お試しください。");
       setIsLoading(false);
     }
   }

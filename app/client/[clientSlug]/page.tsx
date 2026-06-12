@@ -18,7 +18,7 @@ export default async function ClientLoginPage({
         <p className="eyebrow">Client Login</p>
         <h1>証憑を送信する</h1>
         <p>
-          Googleアカウントでログインして、領収書や請求書などの資料を1枚ずつ送信します。
+          Googleアカウントでログインして、領収書や請求書などの資料を1件ずつ送信します。
         </p>
         <GoogleLoginButton
           nextPath={`/client/${clientSlug}/signup`}
@@ -26,7 +26,7 @@ export default async function ClientLoginPage({
         />
         <Link className="text-link" href={`/client/${clientSlug}/submissions`}>
           <FileText size={16} />
-          送信履歴のサンプルを見る
+          送信履歴を見る
         </Link>
       </section>
     </main>
