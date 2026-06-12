@@ -52,28 +52,8 @@ button {
 }
 
 button:disabled {
-  cursor: not-allowed;
+  cursor: progress;
   opacity: 0.72;
-}
-
-.disabled-action {
-  background: #88a996;
-}
-
-.loading-panel {
-  align-items: center;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-  color: var(--muted);
-  display: flex;
-  font-weight: 800;
-  gap: 10px;
-  justify-content: center;
-  margin-top: 24px;
-  min-height: 140px;
-  padding: 24px;
 }
 
 .spin-icon {
@@ -829,10 +809,16 @@ textarea {
   color: var(--yellow);
 }
 
+.pill.stopped {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
 .row-actions {
   align-items: center;
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .small-button {
@@ -1067,6 +1053,27 @@ textarea {
 .compact-action {
   min-height: 38px;
   padding: 0 12px;
+}
+
+.account-control-actions,
+.delete-confirm-form {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.delete-confirm-form label {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.84rem;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.delete-confirm-form input {
+  accent-color: #b03a2e;
 }
 
 .empty-state {

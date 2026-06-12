@@ -1,9 +1,8 @@
 export type UserRole = "customer" | "admin";
-export type ApprovalStatus = "pending" | "approved" | "rejected";
+export type ApprovalStatus = "pending" | "approved" | "rejected" | "suspended";
 export type OcrStatus = "pending" | "completed" | "failed" | "skipped";
 export type MfSubmissionStatus = "not_ready" | "not_sent" | "sent" | "failed";
 export type DocumentClassificationStatus = "pending" | "completed" | "failed";
-export type OcrPaymentMethod = "cash" | "credit_card" | "cashless";
 
 export type Database = {
   public: {
@@ -47,6 +46,7 @@ export type Database = {
           error_drive_folder_id: string | null;
           error_drive_folder_name: string | null;
           journal_prompt: string | null;
+          submission_retention_limit: number;
           approved_at: string | null;
           created_at: string;
           updated_at: string;
@@ -62,6 +62,7 @@ export type Database = {
           error_drive_folder_id?: string | null;
           error_drive_folder_name?: string | null;
           journal_prompt?: string | null;
+          submission_retention_limit?: number;
           approved_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -77,6 +78,7 @@ export type Database = {
           error_drive_folder_id?: string | null;
           error_drive_folder_name?: string | null;
           journal_prompt?: string | null;
+          submission_retention_limit?: number;
           approved_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -133,7 +135,6 @@ export type Database = {
           ocr_amount: number | null;
           ocr_store: string | null;
           ocr_summary: string | null;
-          ocr_payment_method: OcrPaymentMethod;
           ocr_is_credit_card: boolean | null;
           mf_status: MfSubmissionStatus;
           mf_error: string | null;
@@ -170,7 +171,6 @@ export type Database = {
           ocr_amount?: number | null;
           ocr_store?: string | null;
           ocr_summary?: string | null;
-          ocr_payment_method?: OcrPaymentMethod;
           ocr_is_credit_card?: boolean | null;
           mf_status?: MfSubmissionStatus;
           mf_error?: string | null;
@@ -207,7 +207,6 @@ export type Database = {
           ocr_amount?: number | null;
           ocr_store?: string | null;
           ocr_summary?: string | null;
-          ocr_payment_method?: OcrPaymentMethod;
           ocr_is_credit_card?: boolean | null;
           mf_status?: MfSubmissionStatus;
           mf_error?: string | null;

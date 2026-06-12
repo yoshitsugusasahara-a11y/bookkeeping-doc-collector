@@ -65,13 +65,6 @@ function getMfStatusLabel(status?: string | null) {
   return "MF未送信";
 }
 
-function getPaymentMethodValue(method?: string | null, isCreditCard?: boolean | null) {
-  if (method === "credit_card" || method === "cashless" || method === "cash") {
-    return method;
-  }
-  return isCreditCard ? "credit_card" : "cash";
-}
-
 function getDocumentClassificationStatusLabel(status?: string | null) {
   if (status === "completed") return "分類済み";
   if (status === "failed") return "分類失敗";
@@ -124,7 +117,7 @@ export default async function ClientSubmissionsPage({
   const { data: submissionRows } = await supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", account.id)
     .order("submitted_at", { ascending: false });
@@ -307,16 +300,17 @@ export default async function ClientSubmissionsPage({
                     <label className="field">
                       <span>支払方法</span>
                       <select
-                        name="ocrPaymentMethod"
-                        defaultValue={getPaymentMethodValue(
-                          item.ocr_payment_method,
-                          item.ocr_is_credit_card,
-                        )}
+                        name="ocrIsCreditCard"
+                        defaultValue={
+                          item.ocr_is_credit_card === null
+                            ? ""
+                            : String(item.ocr_is_credit_card)
+                        }
                         disabled={isSent}
                       >
-                        <option value="cash">現金</option>
-                        <option value="credit_card">クレジット払い</option>
-                        <option value="cashless">キャッシュレス等</option>
+                        <option value="">未取得</option>
+                        <option value="false">現金</option>
+                        <option value="true">クレカ等</option>
                       </select>
                     </label>
                     <div className="action-row">
@@ -344,10 +338,7 @@ export default async function ClientSubmissionsPage({
                     action={sendSubmissionToMoneyForward.bind(null, clientSlug)}
                   >
                     <input type="hidden" name="submissionId" value={item.id} />
-                    <MoneyForwardSendButton
-                      disabled={!canSendToMf}
-                      completed={item.mf_status === "sent"}
-                    />
+                    <MoneyForwardSendButton disabled={!canSendToMf} />
                   </form>
                 </div>
 

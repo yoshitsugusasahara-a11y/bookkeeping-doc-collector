@@ -17,7 +17,7 @@ import type { Database } from "@/lib/supabase/types";
 
 const receiptUploadBucket = "receipt_uploads";
 const submissionProcessingColumns =
-  "id, customer_account_id, transaction_note, file_name, mime_type, source_storage_path, submitted_at, drive_file_id, drive_view_url, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, mf_status";
+  "id, customer_account_id, transaction_note, file_name, mime_type, source_storage_path, submitted_at, drive_file_id, drive_view_url, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card, mf_status";
 
 type SubmissionRow = {
   id: string;
@@ -40,7 +40,6 @@ type SubmissionRow = {
   ocr_amount: number | null;
   ocr_store: string | null;
   ocr_summary: string | null;
-  ocr_payment_method: "cash" | "credit_card" | "cashless";
   ocr_is_credit_card: boolean | null;
   mf_status: string;
 };
@@ -68,9 +67,6 @@ function getCompletedOcr(submission: SubmissionRow): ReceiptOcrResult | null {
     amount: submission.ocr_amount,
     store: submission.ocr_store,
     summary: submission.ocr_summary,
-    payment_method:
-      submission.ocr_payment_method ||
-      (submission.ocr_is_credit_card ? "credit_card" : "cash"),
     is_credit_card: submission.ocr_is_credit_card,
   };
 }
@@ -367,7 +363,6 @@ async function runOcrForSubmission({
       ocr_amount: ocr.result.amount,
       ocr_store: ocr.result.store,
       ocr_summary: ocr.result.summary,
-      ocr_payment_method: ocr.result.payment_method,
       ocr_is_credit_card: ocr.result.is_credit_card,
     })
     .eq("id", submission.id);

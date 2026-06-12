@@ -25,20 +25,15 @@ export function GoogleLoginButton({
       nextPath,
     )}`;
 
-    await supabase.auth.signOut({ scope: "local" });
-
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo,
-        queryParams: {
-          prompt: "select_account",
-        },
       },
     });
 
     if (error) {
-      setErrorMessage("ログインを開始できませんでした。時間をおいて再度お試しください。");
+      setErrorMessage("ログインを開始できませんでした。設定を確認してください。");
       setIsLoading(false);
     }
   }

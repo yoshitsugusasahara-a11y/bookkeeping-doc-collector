@@ -20,26 +20,11 @@ function SaveButton({ disabled }: { disabled: boolean }) {
   );
 }
 
-function MfSendButton({
-  disabled,
-  completed,
-}: {
-  disabled: boolean;
-  completed: boolean;
-}) {
+function MfSendButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
 
-  if (disabled) {
-    return (
-      <button className="primary-action compact disabled-action" type="button" disabled>
-        <Send size={15} />
-        {completed ? "送信完了" : "MF送信不可"}
-      </button>
-    );
-  }
-
   return (
-    <button className="primary-action compact" type="submit" disabled={pending}>
+    <button className="primary-action compact" type="submit" disabled={disabled || pending}>
       {pending ? (
         <>
           <Loader2 className="spin-icon" size={15} />
@@ -59,12 +44,6 @@ export function OcrSaveButton({ disabled }: { disabled: boolean }) {
   return <SaveButton disabled={disabled} />;
 }
 
-export function MoneyForwardSendButton({
-  disabled,
-  completed = false,
-}: {
-  disabled: boolean;
-  completed?: boolean;
-}) {
-  return <MfSendButton disabled={disabled} completed={completed} />;
+export function MoneyForwardSendButton({ disabled }: { disabled: boolean }) {
+  return <MfSendButton disabled={disabled} />;
 }

@@ -7,6 +7,8 @@ import {
   FileText,
   ImageIcon,
   Link2Off,
+  PauseCircle,
+  RotateCcw,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
@@ -17,10 +19,16 @@ import {
   disconnectMoneyForward,
   toggleDocumentRule,
 } from "./actions";
+import {
+  deleteCustomerAccount,
+  resumeCustomerAccount,
+  suspendCustomerAccount,
+} from "../actions";
 import { DocumentRuleForm } from "./document-rule-form";
 import { DriveSettingsForm } from "./drive-settings-form";
 import { JournalPromptForm } from "./journal-prompt-form";
 import { MfProcessForm } from "./mf-process-form";
+import { RetentionSettingsForm } from "./retention-settings-form";
 
 function getFileTypeLabel(mimeType: string) {
   if (mimeType === "application/pdf") return "PDF";
@@ -40,6 +48,19 @@ function formatSubmittedAt(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function getCustomerStatusLabel(status?: string | null) {
+  if (status === "approved") return "承認済み";
+  if (status === "suspended") return "利用停止中";
+  if (status === "rejected") return "却下";
+  return "承認待ち";
+}
+
+function getCustomerStatusClass(status?: string | null) {
+  if (status === "approved") return "pill approved";
+  if (status === "suspended" || status === "rejected") return "pill stopped";
+  return "pill pending";
 }
 
 function getOcrStatusLabel(status?: string | null) {
@@ -63,13 +84,6 @@ function getMfStatusLabel(status?: string | null) {
   if (status === "failed") return "MF送信失敗";
   if (status === "not_ready") return "MF未送信";
   return "MF送信待ち";
-}
-
-function getPaymentMethodLabel(method?: string | null, isCreditCard?: boolean | null) {
-  if (method === "credit_card") return "クレジット払い";
-  if (method === "cashless") return "キャッシュレス等";
-  if (method === "cash") return "現金";
-  return isCreditCard ? "クレジット払い" : "現金";
 }
 
 function getDocumentClassificationStatusLabel(status?: string | null) {
@@ -141,7 +155,7 @@ export default async function AdminCustomerDetailPage({
   const { data: customer } = await supabase
     .from("customer_accounts")
     .select(
-      "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, journal_prompt, created_at",
+      "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, journal_prompt, submission_retention_limit, created_at",
     )
     .eq("id", customerId)
     .maybeSingle();
@@ -167,7 +181,7 @@ export default async function AdminCustomerDetailPage({
   const { data: submissionRows } = await supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", customer.id)
     .order("submitted_at", { ascending: false });
@@ -190,6 +204,8 @@ export default async function AdminCustomerDetailPage({
   const documentRuleNameById = new Map(
     documentRules.map((rule) => [rule.id, rule.document_name]),
   );
+  const isApproved = customer.approval_status === "approved";
+  const isSuspended = customer.approval_status === "suspended";
 
   return (
     <main className="admin-detail-shell">
@@ -219,6 +235,65 @@ export default async function AdminCustomerDetailPage({
         <div className="metric">
           <small>MF連携</small>
           <strong>{mfConnection ? "連携済み" : "未連携"}</strong>
+        </div>
+      </section>
+
+      <section className="settings-panel" aria-label="顧客アカウント操作">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Account Control</p>
+            <h2>顧客アカウント操作</h2>
+            <p className="muted">
+              利用停止にすると顧客側の送信・履歴・設定・MF送信を停止し、MF連携も解除します。
+              削除はアプリ内データを消す不可逆操作です。
+            </p>
+          </div>
+          <span className={getCustomerStatusClass(customer.approval_status)}>
+            {getCustomerStatusLabel(customer.approval_status)}
+          </span>
+        </div>
+        <div className="account-control-actions">
+          {isApproved && (
+            <form action={suspendCustomerAccount}>
+              <input type="hidden" name="accountId" value={customer.id} />
+              <button className="danger-action" type="submit">
+                <PauseCircle size={18} />
+                利用停止
+              </button>
+            </form>
+          )}
+          {isSuspended && (
+            <>
+              <form action={resumeCustomerAccount}>
+                <input type="hidden" name="accountId" value={customer.id} />
+                <button className="primary-action" type="submit">
+                  <RotateCcw size={18} />
+                  利用再開
+                </button>
+              </form>
+              <form className="delete-confirm-form" action={deleteCustomerAccount}>
+                <input type="hidden" name="accountId" value={customer.id} />
+                <label>
+                  <input
+                    type="checkbox"
+                    name="confirmDelete"
+                    value="true"
+                    required
+                  />
+                  削除することを確認
+                </label>
+                <button className="danger-action" type="submit">
+                  <Trash2 size={18} />
+                  顧客を削除
+                </button>
+              </form>
+            </>
+          )}
+          {!isApproved && !isSuspended && (
+            <p className="muted">
+              承認待ちまたは却下状態の顧客です。承認は顧客一覧から行えます。
+            </p>
+          )}
         </div>
       </section>
 
@@ -299,6 +374,20 @@ export default async function AdminCustomerDetailPage({
         <JournalPromptForm
           customerId={customer.id}
           journalPrompt={customer.journal_prompt}
+        />
+      </section>
+
+      <section className="settings-panel" aria-label="資料保存上限">
+        <div>
+          <p className="eyebrow">Storage Limit</p>
+          <h2>資料保存上限</h2>
+          <p className="muted">
+            Supabaseに残す履歴件数を顧客ごとに設定します。上限を超えた古い資料は、アプリ内の履歴から削除されます。
+          </p>
+        </div>
+        <RetentionSettingsForm
+          customerId={customer.id}
+          submissionRetentionLimit={customer.submission_retention_limit || 200}
         />
       </section>
 
@@ -480,7 +569,13 @@ export default async function AdminCustomerDetailPage({
                   </div>
                   <div>
                     <dt>支払方法</dt>
-                    <dd>{getPaymentMethodLabel(item.ocr_payment_method, item.ocr_is_credit_card)}</dd>
+                    <dd>
+                      {item.ocr_is_credit_card === null
+                        ? "未取得"
+                        : item.ocr_is_credit_card
+                          ? "クレカ等"
+                          : "現金"}
+                    </dd>
                   </div>
                   <div>
                     <dt>MF送信</dt>

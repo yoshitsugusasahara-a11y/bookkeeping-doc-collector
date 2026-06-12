@@ -3,12 +3,21 @@ import {
   AlertTriangle,
   Check,
   ExternalLink,
+  PauseCircle,
+  RotateCcw,
   Search,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { approveCustomerAccount, logoutAdmin } from "./actions";
+import {
+  approveCustomerAccount,
+  deleteCustomerAccount,
+  logoutAdmin,
+  resumeCustomerAccount,
+  suspendCustomerAccount,
+} from "./actions";
 import { CustomerUrlBuilder, CustomerUrlTools } from "./customer-url-builder";
 
 type CustomerRow = {
@@ -16,7 +25,7 @@ type CustomerRow = {
   user_id: string;
   customer_name: string;
   client_slug: string;
-  approval_status: "pending" | "approved" | "rejected";
+  approval_status: "pending" | "approved" | "rejected" | "suspended";
   drive_folder_id: string | null;
   drive_folder_name: string | null;
   created_at: string;
@@ -34,6 +43,19 @@ function formatAdminDateTime(value?: string | null) {
     dateStyle: "short",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function getStatusLabel(status: CustomerRow["approval_status"]) {
+  if (status === "approved") return "承認済み";
+  if (status === "suspended") return "利用停止中";
+  if (status === "rejected") return "却下";
+  return "承認待ち";
+}
+
+function getStatusClass(status: CustomerRow["approval_status"]) {
+  if (status === "approved") return "pill approved";
+  if (status === "suspended" || status === "rejected") return "pill stopped";
+  return "pill pending";
 }
 
 export default async function AdminCustomersPage() {
@@ -62,11 +84,11 @@ export default async function AdminCustomersPage() {
           <p className="eyebrow">Admin Only</p>
           <h1>管理者権限が必要です</h1>
           <p>
-            このGoogleアカウントはまだ管理者として登録されていません。
-            Supabaseの`admin_users`にメールアドレスを登録してください。
+            このGoogleアカウントは管理者として登録されていません。Supabaseの
+            admin_usersにメールアドレスを登録してください。
           </p>
-          <Link className="secondary-action" href="/">
-            トップへ戻る
+          <Link className="secondary-action" href="/admin/login">
+            管理者ログインへ戻る
           </Link>
         </section>
       </main>
@@ -128,6 +150,9 @@ export default async function AdminCustomersPage() {
   const pendingCount = customers.filter(
     (customer) => customer.approval_status === "pending",
   ).length;
+  const suspendedCount = customers.filter(
+    (customer) => customer.approval_status === "suspended",
+  ).length;
   const driveMissingCount = customers.filter(
     (customer) => !customer.drive_folder_id,
   ).length;
@@ -147,7 +172,9 @@ export default async function AdminCustomersPage() {
         </div>
         <div className="sidebar-summary">
           <strong>顧客管理</strong>
-          <span>顧客URLの発行、承認、Drive設定、送信履歴をこの画面で管理します。</span>
+          <span>
+            顧客URLの作成、承認、利用停止、Drive設定、MF連携状況をこの画面で管理します。
+          </span>
         </div>
         <form action={logoutAdmin}>
           <button className="secondary-action sidebar-action" type="submit">
@@ -176,6 +203,10 @@ export default async function AdminCustomersPage() {
             <strong>{pendingCount}</strong>
           </div>
           <div className="metric">
+            <small>利用停止中</small>
+            <strong>{suspendedCount}</strong>
+          </div>
+          <div className="metric">
             <small>送信数</small>
             <strong>{submissionTotal}</strong>
           </div>
@@ -189,7 +220,8 @@ export default async function AdminCustomersPage() {
           <section className="warning-banner">
             <AlertTriangle size={18} />
             <span>
-              Drive未設定の顧客が{driveMissingCount}件あります。顧客詳細から保存先フォルダを設定してください。
+              Drive未設定の顧客が{driveMissingCount}
+              件あります。顧客詳細から保存先フォルダを設定してください。
             </span>
           </section>
         )}
@@ -208,7 +240,10 @@ export default async function AdminCustomersPage() {
           )}
           {customers.map((customer) => {
             const isApproved = customer.approval_status === "approved";
-            const statusLabel = isApproved ? "承認済み" : "承認待ち";
+            const isSuspended = customer.approval_status === "suspended";
+            const canApprove =
+              customer.approval_status === "pending" ||
+              customer.approval_status === "rejected";
             const driveLabel = customer.drive_folder_id
               ? customer.drive_folder_name || "Drive設定済み"
               : "未設定";
@@ -226,13 +261,13 @@ export default async function AdminCustomersPage() {
                     clientSlug={customer.client_slug}
                   />
                 </div>
-                <span
-                  className={isApproved ? "pill approved" : "pill pending"}
-                >
-                  {statusLabel}
+                <span className={getStatusClass(customer.approval_status)}>
+                  {getStatusLabel(customer.approval_status)}
                 </span>
                 <span
-                  className={mfConnection ? "mf-status connected" : "mf-status missing"}
+                  className={
+                    mfConnection ? "mf-status connected" : "mf-status missing"
+                  }
                 >
                   <strong>{mfConnection ? "連携済み" : "未連携"}</strong>
                   <small>{formatAdminDateTime(mfConnection?.connected_at)}</small>
@@ -246,7 +281,7 @@ export default async function AdminCustomersPage() {
                   {submissionCountByAccountId.get(customer.id) || 0}件
                 </strong>
                 <div className="row-actions">
-                  {!isApproved && (
+                  {canApprove && (
                     <form action={approveCustomerAccount}>
                       <input
                         type="hidden"
@@ -258,6 +293,57 @@ export default async function AdminCustomersPage() {
                         承認
                       </button>
                     </form>
+                  )}
+                  {isApproved && (
+                    <form action={suspendCustomerAccount}>
+                      <input
+                        type="hidden"
+                        name="accountId"
+                        value={customer.id}
+                      />
+                      <button className="danger-action compact-action" type="submit">
+                        <PauseCircle size={16} />
+                        利用停止
+                      </button>
+                    </form>
+                  )}
+                  {isSuspended && (
+                    <>
+                      <form action={resumeCustomerAccount}>
+                        <input
+                          type="hidden"
+                          name="accountId"
+                          value={customer.id}
+                        />
+                        <button className="small-button" type="submit">
+                          <RotateCcw size={16} />
+                          利用再開
+                        </button>
+                      </form>
+                      <form
+                        className="delete-confirm-form"
+                        action={deleteCustomerAccount}
+                      >
+                        <input
+                          type="hidden"
+                          name="accountId"
+                          value={customer.id}
+                        />
+                        <label>
+                          <input
+                            type="checkbox"
+                            name="confirmDelete"
+                            value="true"
+                            required
+                          />
+                          確認
+                        </label>
+                        <button className="danger-action compact-action" type="submit">
+                          <Trash2 size={16} />
+                          削除
+                        </button>
+                      </form>
+                    </>
                   )}
                   <Link
                     className="icon-button"

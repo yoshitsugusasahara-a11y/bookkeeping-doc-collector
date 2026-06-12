@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { processCustomerPendingOcr } from "@/lib/receipts/process-submissions";
+import { cleanupCustomerOldSubmissions } from "@/lib/receipts/retention";
 import { createClient } from "@/lib/supabase/server";
 
 type UploadState = {
@@ -99,7 +100,7 @@ export async function createSubmission(
 
   const { data: account } = await supabase
     .from("customer_accounts")
-    .select("id, approval_status")
+    .select("id, approval_status, submission_retention_limit")
     .eq("user_id", user.id)
     .eq("client_slug", clientSlug)
     .maybeSingle();
@@ -161,6 +162,16 @@ export async function createSubmission(
       status: "error",
       message: "送信履歴を保存できませんでした。時間をおいて再度お試しください。",
     };
+  }
+
+  try {
+    await cleanupCustomerOldSubmissions({
+      supabase,
+      customerId: account.id,
+      limit: account.submission_retention_limit,
+    });
+  } catch (cleanupError) {
+    console.error("Failed to clean up old submissions", cleanupError);
   }
 
   revalidatePath(`/client/${clientSlug}/submissions`);

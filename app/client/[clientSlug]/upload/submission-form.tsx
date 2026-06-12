@@ -16,51 +16,11 @@ function getFileTypeLabel(file: File) {
   return file.type || "ファイル";
 }
 
-function createImageThumbnail(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      resolve("");
-      return;
-    }
-
-    const image = new Image();
-    const objectUrl = URL.createObjectURL(file);
-
-    image.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const longestSide = 600;
-      const scale = Math.min(1, longestSide / Math.max(image.width, image.height));
-      const width = Math.max(1, Math.round(image.width * scale));
-      const height = Math.max(1, Math.round(image.height * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext("2d");
-
-      if (!context) {
-        resolve("");
-        return;
-      }
-
-      context.drawImage(image, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", 0.72));
-    };
-
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("Image thumbnail generation failed."));
-    };
-
-    image.src = objectUrl;
-  });
-}
-
 export function SubmissionForm({ clientSlug }: SubmissionFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const previewUrlRef = useRef("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
-  const [thumbnailDataUrl, setThumbnailDataUrl] = useState("");
   const [previewFailed, setPreviewFailed] = useState(false);
   const [state, formAction, isPending] = useActionState(
     createSubmission.bind(null, clientSlug),
@@ -83,7 +43,6 @@ export function SubmissionForm({ clientSlug }: SubmissionFormProps) {
     }
     setSelectedFile(null);
     setPreviewUrl("");
-    setThumbnailDataUrl("");
     setPreviewFailed(false);
   };
 
@@ -103,7 +62,7 @@ export function SubmissionForm({ clientSlug }: SubmissionFormProps) {
     };
   }, []);
 
-  const handleFileChange = async (file: File | null) => {
+  const handleFileChange = (file: File | null) => {
     clearSelectedFile();
     if (!file) return;
 
@@ -114,13 +73,10 @@ export function SubmissionForm({ clientSlug }: SubmissionFormProps) {
       const objectUrl = URL.createObjectURL(file);
       previewUrlRef.current = objectUrl;
       setPreviewUrl(objectUrl);
-      const thumbnail = await createImageThumbnail(file);
-      setThumbnailDataUrl(thumbnail);
     } catch (error) {
       console.warn("Failed to prepare file preview", error);
       setPreviewFailed(true);
       setPreviewUrl("");
-      setThumbnailDataUrl("");
     }
   };
 
@@ -132,7 +88,7 @@ export function SubmissionForm({ clientSlug }: SubmissionFormProps) {
           <span>{state.message}</span>
         </div>
       )}
-      <input type="hidden" name="thumbnailDataUrl" value={thumbnailDataUrl} />
+      <input type="hidden" name="thumbnailDataUrl" value="" />
       <label className="file-drop">
         <input
           name="receiptFile"

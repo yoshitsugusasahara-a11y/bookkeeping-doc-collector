@@ -12,6 +12,8 @@ exception
   when duplicate_object then null;
 end $$;
 
+alter type public.approval_status add value if not exists 'suspended';
+
 do $$ begin
   create type public.ocr_status as enum ('pending', 'completed', 'failed', 'skipped');
 exception
@@ -50,6 +52,7 @@ create table if not exists public.customer_accounts (
   error_drive_folder_id text,
   error_drive_folder_name text,
   journal_prompt text,
+  submission_retention_limit integer not null default 200,
   approved_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -90,7 +93,6 @@ create table if not exists public.submissions (
   ocr_amount integer,
   ocr_store text,
   ocr_summary text,
-  ocr_payment_method text not null default 'cash',
   ocr_is_credit_card boolean,
   mf_status public.mf_submission_status not null default 'not_ready',
   mf_error text,
@@ -118,7 +120,6 @@ alter table public.submissions
   add column if not exists ocr_amount integer,
   add column if not exists ocr_store text,
   add column if not exists ocr_summary text,
-  add column if not exists ocr_payment_method text not null default 'cash',
   add column if not exists ocr_is_credit_card boolean,
   add column if not exists mf_status public.mf_submission_status not null default 'not_ready',
   add column if not exists mf_error text,
@@ -129,7 +130,8 @@ alter table public.submissions
 alter table public.customer_accounts
   add column if not exists error_drive_folder_id text,
   add column if not exists error_drive_folder_name text,
-  add column if not exists journal_prompt text;
+  add column if not exists journal_prompt text,
+  add column if not exists submission_retention_limit integer not null default 200;
 
 create table if not exists public.mf_connections (
   id uuid primary key default gen_random_uuid(),
@@ -211,7 +213,7 @@ alter table public.document_rules enable row level security;
 
 grant usage on schema public to authenticated;
 grant select, insert, update on public.profiles to authenticated;
-grant select, insert, update on public.customer_accounts to authenticated;
+grant select, insert, update, delete on public.customer_accounts to authenticated;
 grant select on public.admin_users to authenticated;
 grant select, insert, update on public.submissions to authenticated;
 grant select, insert, update, delete on public.mf_connections to authenticated;
@@ -278,6 +280,12 @@ on public.customer_accounts for update
 to authenticated
 using (public.is_admin())
 with check (public.is_admin());
+
+drop policy if exists "customer_accounts_delete_admin" on public.customer_accounts;
+create policy "customer_accounts_delete_admin"
+on public.customer_accounts for delete
+to authenticated
+using (public.is_admin());
 
 drop policy if exists "admin_users_select_admin" on public.admin_users;
 create policy "admin_users_select_admin"
@@ -351,6 +359,15 @@ using (
         and ca.user_id = auth.uid()
     )
   )
+);
+
+drop policy if exists "receipt_uploads_delete_admin" on storage.objects;
+create policy "receipt_uploads_delete_admin"
+on storage.objects for delete
+to authenticated
+using (
+  bucket_id = 'receipt_uploads'
+  and public.is_admin()
 );
 
 drop policy if exists "mf_connections_select_own_or_admin" on public.mf_connections;

@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { processCustomerPendingSubmissions } from "@/lib/receipts/process-submissions";
+import {
+  cleanupCustomerOldSubmissions,
+  normalizeSubmissionRetentionLimit,
+} from "@/lib/receipts/retention";
 import { createClient } from "@/lib/supabase/server";
 
 export type DriveSettingsState = {
@@ -10,6 +14,11 @@ export type DriveSettingsState = {
 };
 
 export type JournalPromptState = {
+  status: "idle" | "success" | "error";
+  message: string;
+};
+
+export type RetentionSettingsState = {
   status: "idle" | "success" | "error";
   message: string;
 };
@@ -117,6 +126,62 @@ export async function updateCustomerJournalPrompt(
 
   revalidatePath(`/admin/customers/${customerId}`);
   return { status: "success", message: "仕訳生成指示を保存しました。" };
+}
+
+export async function updateCustomerRetentionSettings(
+  _prevState: RetentionSettingsState,
+  formData: FormData,
+): Promise<RetentionSettingsState> {
+  const customerId = String(formData.get("customerId") || "");
+  const retentionLimit = normalizeSubmissionRetentionLimit(
+    formData.get("submissionRetentionLimit"),
+  );
+
+  if (!customerId) {
+    return { status: "error", message: "顧客情報を取得できませんでした。" };
+  }
+
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  const { error } = await supabase
+    .from("customer_accounts")
+    .update({
+      submission_retention_limit: retentionLimit,
+    })
+    .eq("id", customerId);
+
+  if (error) {
+    return { status: "error", message: "資料保存上限を保存できませんでした。" };
+  }
+
+  try {
+    const deletedCount = await cleanupCustomerOldSubmissions({
+      supabase,
+      customerId,
+      limit: retentionLimit,
+    });
+
+    revalidatePath(`/admin/customers/${customerId}`);
+    revalidatePath("/admin/customers");
+    return {
+      status: "success",
+      message:
+        deletedCount > 0
+          ? `資料保存上限を保存し、古い資料を${deletedCount}件削除しました。`
+          : "資料保存上限を保存しました。",
+    };
+  } catch (cleanupError) {
+    console.error("Failed to clean up old submissions", cleanupError);
+    revalidatePath(`/admin/customers/${customerId}`);
+    return {
+      status: "error",
+      message:
+        "資料保存上限は保存しましたが、古い資料の整理に失敗しました。時間をおいて再度保存してください。",
+    };
+  }
 }
 
 export async function toggleDocumentRule(formData: FormData) {
