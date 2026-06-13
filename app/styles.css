@@ -52,7 +52,7 @@ button {
 }
 
 button:disabled {
-  cursor: progress;
+  cursor: default;
   opacity: 0.72;
 }
 
