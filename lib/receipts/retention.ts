@@ -32,7 +32,7 @@ export async function cleanupCustomerOldSubmissions({
 }) {
   const normalizedLimit = normalizeSubmissionRetentionLimit(limit);
   let deletedCount = 0;
-  const storageClient = (() => {
+  const cleanupClient = (() => {
     try {
       return createAdminClient();
     } catch {
@@ -41,7 +41,7 @@ export async function cleanupCustomerOldSubmissions({
   })();
 
   while (true) {
-    const { data: oldSubmissions, error } = await supabase
+    const { data: oldSubmissions, error } = await cleanupClient
       .from("submissions")
       .select("id, source_storage_path")
       .eq("customer_account_id", customerId)
@@ -57,7 +57,7 @@ export async function cleanupCustomerOldSubmissions({
       .filter((path): path is string => Boolean(path));
 
     if (storagePaths.length > 0) {
-      const { error: storageError } = await storageClient.storage
+      const { error: storageError } = await cleanupClient.storage
         .from(receiptUploadBucket)
         .remove(storagePaths);
 
@@ -71,7 +71,7 @@ export async function cleanupCustomerOldSubmissions({
     }
 
     const ids = oldSubmissions.map((submission) => submission.id);
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await cleanupClient
       .from("submissions")
       .delete()
       .eq("customer_account_id", customerId)
