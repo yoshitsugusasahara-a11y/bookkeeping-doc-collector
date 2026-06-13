@@ -41,14 +41,21 @@ export async function updateCustomerDriveSettings(
   const customerId = String(formData.get("customerId") || "");
   const driveFolderId = String(formData.get("driveFolderId") || "").trim();
   const driveFolderName = String(formData.get("driveFolderName") || "").trim();
-  const errorDriveFolderId = String(formData.get("errorDriveFolderId") || "").trim();
-  const errorDriveFolderName = String(formData.get("errorDriveFolderName") || "").trim();
+  const errorDriveFolderId = String(
+    formData.get("errorDriveFolderId") || "",
+  ).trim();
+  const errorDriveFolderName = String(
+    formData.get("errorDriveFolderName") || "",
+  ).trim();
 
   if (!customerId) {
     return { status: "error", message: "顧客情報を取得できませんでした。" };
   }
 
-  const supabase = await createClient();
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
 
   const { error } = await supabase
     .from("customer_accounts")
@@ -228,7 +235,8 @@ export async function disconnectMoneyForward(formData: FormData) {
     return;
   }
 
-  const supabase = await createClient();
+  const supabase = await ensureAdmin();
+  if (!supabase) return;
 
   await supabase
     .from("mf_connections")
@@ -246,12 +254,8 @@ export async function runMoneyForwardSubmissionProcess(formData: FormData) {
     return;
   }
 
-  const supabase = await createClient();
-  const { data: isAdmin, error: adminError } = await supabase.rpc("is_admin");
-
-  if (adminError || !isAdmin) {
-    return;
-  }
+  const supabase = await ensureAdmin();
+  if (!supabase) return;
 
   await processCustomerPendingSubmissions({
     supabase,

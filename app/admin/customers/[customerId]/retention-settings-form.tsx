@@ -62,7 +62,8 @@ export function RetentionSettingsForm({
         />
       </label>
       <p className="muted">
-        上限を超えた古い履歴、サムネイル、一時保存ファイルをSupabaseから削除します。Google Driveに保存済みのファイルは削除しません。
+        上限を超えた古い履歴、サムネイル、一時保存ファイルをSupabaseから削除します。
+        Google Driveに保存済みのファイルは削除しません。
       </p>
       <SubmitButton />
       {state.status !== "idle" && (

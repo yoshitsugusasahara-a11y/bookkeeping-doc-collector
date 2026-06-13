@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/types";
 
 const receiptUploadBucket = "receipt_uploads";
@@ -31,6 +32,13 @@ export async function cleanupCustomerOldSubmissions({
 }) {
   const normalizedLimit = normalizeSubmissionRetentionLimit(limit);
   let deletedCount = 0;
+  const storageClient = (() => {
+    try {
+      return createAdminClient();
+    } catch {
+      return supabase;
+    }
+  })();
 
   while (true) {
     const { data: oldSubmissions, error } = await supabase
@@ -49,11 +57,17 @@ export async function cleanupCustomerOldSubmissions({
       .filter((path): path is string => Boolean(path));
 
     if (storagePaths.length > 0) {
-      const { error: storageError } = await supabase.storage
+      const { error: storageError } = await storageClient.storage
         .from(receiptUploadBucket)
         .remove(storagePaths);
 
-      if (storageError) throw storageError;
+      if (storageError) {
+        console.warn("Failed to remove old submission storage files", {
+          customerId,
+          storagePaths,
+          error: storageError,
+        });
+      }
     }
 
     const ids = oldSubmissions.map((submission) => submission.id);
