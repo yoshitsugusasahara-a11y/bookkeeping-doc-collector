@@ -7,6 +7,15 @@ const defaultSubmissionRetentionLimit = 200;
 const maxSubmissionRetentionLimit = 5000;
 const cleanupBatchSize = 100;
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return String(error);
+}
+
 export function normalizeSubmissionRetentionLimit(value: unknown) {
   const numericValue =
     typeof value === "number" ? value : Number.parseInt(String(value || ""), 10);
@@ -32,10 +41,16 @@ export async function cleanupCustomerOldSubmissions({
 }) {
   const normalizedLimit = normalizeSubmissionRetentionLimit(limit);
   let deletedCount = 0;
+  let cleanupClientName = "session";
   const cleanupClient = (() => {
     try {
+      cleanupClientName = "service_role";
       return createAdminClient();
-    } catch {
+    } catch (adminClientError) {
+      console.warn("Falling back to session Supabase client for retention cleanup", {
+        customerId,
+        error: getErrorMessage(adminClientError),
+      });
       return supabase;
     }
   })();
@@ -49,7 +64,11 @@ export async function cleanupCustomerOldSubmissions({
       .order("id", { ascending: false })
       .range(normalizedLimit, normalizedLimit + cleanupBatchSize - 1);
 
-    if (error) throw error;
+    if (error) {
+      throw new Error(
+        `古い資料の取得に失敗しました。client=${cleanupClientName}, message=${getErrorMessage(error)}`,
+      );
+    }
     if (!oldSubmissions || oldSubmissions.length === 0) break;
 
     const storagePaths = oldSubmissions
@@ -77,7 +96,11 @@ export async function cleanupCustomerOldSubmissions({
       .eq("customer_account_id", customerId)
       .in("id", ids);
 
-    if (deleteError) throw deleteError;
+    if (deleteError) {
+      throw new Error(
+        `古い資料の履歴削除に失敗しました。client=${cleanupClientName}, ids=${ids.join(",")}, message=${getErrorMessage(deleteError)}`,
+      );
+    }
 
     deletedCount += ids.length;
   }

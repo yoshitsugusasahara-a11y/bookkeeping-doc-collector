@@ -23,6 +23,15 @@ export type RetentionSettingsState = {
   message: string;
 };
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return String(error);
+}
+
 async function ensureAdmin() {
   const supabase = await createClient();
   const { data: isAdmin, error } = await supabase.rpc("is_admin");
@@ -68,7 +77,10 @@ export async function updateCustomerDriveSettings(
     .eq("id", customerId);
 
   if (error) {
-    return { status: "error", message: "Drive設定を保存できませんでした。" };
+    return {
+      status: "error",
+      message: `Drive設定を保存できませんでした。${getErrorMessage(error)}`,
+    };
   }
 
   revalidatePath(`/admin/customers/${customerId}`);
@@ -128,7 +140,10 @@ export async function updateCustomerJournalPrompt(
     .eq("id", customerId);
 
   if (error) {
-    return { status: "error", message: "仕訳生成指示を保存できませんでした。" };
+    return {
+      status: "error",
+      message: `仕訳生成指示を保存できませんでした。${getErrorMessage(error)}`,
+    };
   }
 
   revalidatePath(`/admin/customers/${customerId}`);
@@ -161,7 +176,10 @@ export async function updateCustomerRetentionSettings(
     .eq("id", customerId);
 
   if (error) {
-    return { status: "error", message: "資料保存上限を保存できませんでした。" };
+    return {
+      status: "error",
+      message: `資料保存上限を保存できませんでした。${getErrorMessage(error)}`,
+    };
   }
 
   try {
@@ -181,12 +199,12 @@ export async function updateCustomerRetentionSettings(
           : "資料保存上限を保存しました。",
     };
   } catch (cleanupError) {
+    const cleanupMessage = getErrorMessage(cleanupError);
     console.error("Failed to clean up old submissions", cleanupError);
     revalidatePath(`/admin/customers/${customerId}`);
     return {
       status: "error",
-      message:
-        "資料保存上限は保存しましたが、古い資料の整理に失敗しました。時間をおいて再度保存してください。",
+      message: `資料保存上限は保存しましたが、古い資料の整理に失敗しました。原因: ${cleanupMessage}`,
     };
   }
 }
