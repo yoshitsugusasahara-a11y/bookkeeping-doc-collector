@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import {
@@ -34,14 +34,29 @@ export function OcrEditForm({
   ocrIsCreditCard?: boolean | null;
 }) {
   const router = useRouter();
+  const [notice, setNotice] = useState<{
+    status: "success" | "error" | "locked";
+    message: string;
+  } | null>(null);
   const [state, formAction, isPending] = useActionState(
     updateSubmissionOcr.bind(null, clientSlug),
     initialState,
   );
 
   useEffect(() => {
+    if (!state.message || state.status === "idle") return;
+
+    setNotice({
+      status: state.status,
+      message: state.message,
+    });
+
     if (state.status === "success") {
-      router.refresh();
+      const refreshTimer = window.setTimeout(() => {
+        router.refresh();
+      }, 1200);
+
+      return () => window.clearTimeout(refreshTimer);
     }
   }, [router, state.status, state.updatedAt]);
 
@@ -53,6 +68,7 @@ export function OcrEditForm({
     <form
       className={isSent ? "ocr-edit-form locked" : "ocr-edit-form"}
       action={formAction}
+      onSubmit={() => setNotice(null)}
     >
       <input type="hidden" name="submissionId" value={submissionId} />
       <label className="field">
@@ -120,11 +136,12 @@ export function OcrEditForm({
           )}
         </button>
       </div>
-      {state.status === "success" && state.message && (
-        <small className="success-text">{state.message}</small>
+      {notice?.status === "success" && (
+        <small className="success-text">{notice.message}</small>
       )}
-      {(state.status === "error" || state.status === "locked") &&
-        state.message && <small className="warning-text">{state.message}</small>}
+      {(notice?.status === "error" || notice?.status === "locked") && (
+        <small className="warning-text">{notice.message}</small>
+      )}
     </form>
   );
 }
