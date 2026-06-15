@@ -58,7 +58,9 @@ export async function updateSubmissionOcr(clientSlug: string, formData: FormData
   const ocrSummary = String(formData.get("ocrSummary") || "").trim() || null;
   const ocrPaymentMethod = parsePaymentMethod(formData.get("ocrPaymentMethod"));
 
-  if (!submissionId) return;
+  if (!submissionId) {
+    redirect(`/client/${clientSlug}/submissions?ocr=error`);
+  }
 
   const { supabase, account } = await getApprovedClientAccount(clientSlug);
 
@@ -71,10 +73,10 @@ export async function updateSubmissionOcr(clientSlug: string, formData: FormData
 
   if (!submission || submission.mf_status === "sent") {
     revalidatePath(`/client/${clientSlug}/submissions`);
-    return;
+    redirect(`/client/${clientSlug}/submissions?ocr=locked`);
   }
 
-  await supabase
+  const { error } = await supabase
     .from("submissions")
     .update({
       ocr_status: "completed",
@@ -91,7 +93,14 @@ export async function updateSubmissionOcr(clientSlug: string, formData: FormData
     .eq("id", submissionId)
     .eq("customer_account_id", account.id);
 
+  if (error) {
+    console.error("Failed to update OCR result", error);
+    revalidatePath(`/client/${clientSlug}/submissions`);
+    redirect(`/client/${clientSlug}/submissions?ocr=error`);
+  }
+
   revalidatePath(`/client/${clientSlug}/submissions`);
+  redirect(`/client/${clientSlug}/submissions?ocr=saved`);
 }
 
 export async function sendSubmissionToMoneyForward(

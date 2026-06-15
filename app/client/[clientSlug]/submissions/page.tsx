@@ -95,10 +95,10 @@ export default async function ClientSubmissionsPage({
   searchParams,
 }: {
   params: Promise<{ clientSlug: string }>;
-  searchParams: Promise<{ sent?: string }>;
+  searchParams: Promise<{ sent?: string; ocr?: string }>;
 }) {
   const { clientSlug } = await params;
-  const { sent } = await searchParams;
+  const { sent, ocr } = await searchParams;
   const supabase = await createClient();
   const user = await getCurrentUserOrRedirect(
     supabase,
@@ -170,6 +170,22 @@ export default async function ClientSubmissionsPage({
         <section className="success-banner">
           <CheckCircle2 size={18} />
           <span>送信が完了しました。</span>
+        </section>
+      )}
+      {ocr === "saved" && (
+        <section className="success-banner">
+          <CheckCircle2 size={18} />
+          <span>OCR結果を保存しました。</span>
+        </section>
+      )}
+      {ocr === "locked" && (
+        <section className="warning-banner">
+          <span>MF送信済みのため、OCR結果は変更できません。</span>
+        </section>
+      )}
+      {ocr === "error" && (
+        <section className="warning-banner">
+          <span>OCR結果の保存に失敗しました。時間をおいて再度お試しください。</span>
         </section>
       )}
 
