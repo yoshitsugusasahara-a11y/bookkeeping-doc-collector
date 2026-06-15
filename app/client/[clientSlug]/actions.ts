@@ -6,6 +6,12 @@ import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { processSubmissionToMoneyForward } from "@/lib/receipts/process-submissions";
 import { createClient } from "@/lib/supabase/server";
 
+export type OcrUpdateState = {
+  status: "idle" | "success" | "error" | "locked";
+  message?: string;
+  updatedAt?: number;
+};
+
 export async function logoutClient(clientSlug: string) {
   const supabase = await createClient();
   await supabase.auth.signOut();
@@ -50,7 +56,11 @@ function parsePaymentMethod(value: FormDataEntryValue | null) {
   return "cash";
 }
 
-export async function updateSubmissionOcr(clientSlug: string, formData: FormData) {
+export async function updateSubmissionOcr(
+  clientSlug: string,
+  _prevState: OcrUpdateState,
+  formData: FormData,
+): Promise<OcrUpdateState> {
   const submissionId = String(formData.get("submissionId") || "");
   const ocrDate = String(formData.get("ocrDate") || "").trim() || null;
   const ocrAmount = parseAmount(formData.get("ocrAmount"));
@@ -59,7 +69,11 @@ export async function updateSubmissionOcr(clientSlug: string, formData: FormData
   const ocrPaymentMethod = parsePaymentMethod(formData.get("ocrPaymentMethod"));
 
   if (!submissionId) {
-    redirect(`/client/${clientSlug}/submissions?ocr=error`);
+    return {
+      status: "error",
+      message: "保存対象の資料を確認できませんでした。",
+      updatedAt: Date.now(),
+    };
   }
 
   const { supabase, account } = await getApprovedClientAccount(clientSlug);
@@ -73,7 +87,11 @@ export async function updateSubmissionOcr(clientSlug: string, formData: FormData
 
   if (!submission || submission.mf_status === "sent") {
     revalidatePath(`/client/${clientSlug}/submissions`);
-    redirect(`/client/${clientSlug}/submissions?ocr=locked`);
+    return {
+      status: "locked",
+      message: "MF送信済みのため、OCR結果は変更できません。",
+      updatedAt: Date.now(),
+    };
   }
 
   const { error } = await supabase
@@ -96,11 +114,19 @@ export async function updateSubmissionOcr(clientSlug: string, formData: FormData
   if (error) {
     console.error("Failed to update OCR result", error);
     revalidatePath(`/client/${clientSlug}/submissions`);
-    redirect(`/client/${clientSlug}/submissions?ocr=error`);
+    return {
+      status: "error",
+      message: "OCR結果の保存に失敗しました。時間をおいて再度お試しください。",
+      updatedAt: Date.now(),
+    };
   }
 
   revalidatePath(`/client/${clientSlug}/submissions`);
-  redirect(`/client/${clientSlug}/submissions?ocr=saved`);
+  return {
+    status: "success",
+    message: "OCR結果を保存しました。",
+    updatedAt: Date.now(),
+  };
 }
 
 export async function sendSubmissionToMoneyForward(

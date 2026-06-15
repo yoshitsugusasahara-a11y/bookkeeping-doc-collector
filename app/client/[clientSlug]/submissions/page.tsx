@@ -15,12 +15,9 @@ import { createClient } from "@/lib/supabase/server";
 import {
   logoutClient,
   sendSubmissionToMoneyForward,
-  updateSubmissionOcr,
 } from "../actions";
-import {
-  MoneyForwardSendButton,
-  OcrSaveButton,
-} from "./submission-actions";
+import { OcrEditForm } from "./ocr-edit-form";
+import { MoneyForwardSendButton } from "./submission-actions";
 
 function getFileTypeLabel(mimeType: string) {
   if (mimeType === "application/pdf") return "PDF";
@@ -277,67 +274,17 @@ export default async function ClientSubmissionsPage({
                     </div>
                   </dl>
 
-                  <form
-                    className={isSent ? "ocr-edit-form locked" : "ocr-edit-form"}
-                    action={updateSubmissionOcr.bind(null, clientSlug)}
-                  >
-                    <input type="hidden" name="submissionId" value={item.id} />
-                    <label className="field">
-                      <span>取引日</span>
-                      <input
-                        type="date"
-                        name="ocrDate"
-                        defaultValue={item.ocr_date || ""}
-                        disabled={isSent}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>金額</span>
-                      <input
-                        inputMode="numeric"
-                        name="ocrAmount"
-                        defaultValue={item.ocr_amount ?? ""}
-                        placeholder="例: 1500"
-                        disabled={isSent}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>店舗名</span>
-                      <input
-                        name="ocrStore"
-                        defaultValue={item.ocr_store || ""}
-                        placeholder="例: コンビニ"
-                        disabled={isSent}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>概要</span>
-                      <input
-                        name="ocrSummary"
-                        defaultValue={item.ocr_summary || ""}
-                        placeholder="例: 備品"
-                        disabled={isSent}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>支払方法</span>
-                      <select
-                        name="ocrPaymentMethod"
-                        defaultValue={
-                          item.ocr_payment_method ||
-                          (item.ocr_is_credit_card ? "credit_card" : "cash")
-                        }
-                        disabled={isSent}
-                      >
-                        <option value="cash">現金</option>
-                        <option value="credit_card">クレジット払い</option>
-                        <option value="cashless">キャッシュレス等</option>
-                      </select>
-                    </label>
-                    <div className="action-row">
-                      <OcrSaveButton disabled={isSent} />
-                    </div>
-                  </form>
+                  <OcrEditForm
+                    clientSlug={clientSlug}
+                    submissionId={item.id}
+                    isSent={isSent}
+                    ocrDate={item.ocr_date}
+                    ocrAmount={item.ocr_amount}
+                    ocrStore={item.ocr_store}
+                    ocrSummary={item.ocr_summary}
+                    ocrPaymentMethod={item.ocr_payment_method}
+                    ocrIsCreditCard={item.ocr_is_credit_card}
+                  />
 
                   <dl className="ocr-summary compact-summary">
                     <div>

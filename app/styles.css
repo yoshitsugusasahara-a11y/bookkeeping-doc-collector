@@ -942,6 +942,11 @@ textarea {
   font-weight: 800;
 }
 
+.success-text {
+  color: var(--green);
+  font-weight: 800;
+}
+
 .settings-panel {
   background: var(--panel);
   border: 1px solid var(--line);
