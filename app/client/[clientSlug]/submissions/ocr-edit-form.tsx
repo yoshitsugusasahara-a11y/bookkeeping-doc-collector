@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import {
@@ -34,41 +34,55 @@ export function OcrEditForm({
   ocrIsCreditCard?: boolean | null;
 }) {
   const router = useRouter();
+  const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<{
     status: "success" | "error" | "locked";
     message: string;
   } | null>(null);
-  const [state, formAction, isPending] = useActionState(
-    updateSubmissionOcr.bind(null, clientSlug),
-    initialState,
-  );
 
-  useEffect(() => {
-    if (!state.message || state.status === "idle") return;
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isSent || isSaving) return;
 
-    setNotice({
-      status: state.status,
-      message: state.message,
-    });
+    setNotice(null);
+    setIsSaving(true);
 
-    if (state.status === "success") {
-      const refreshTimer = window.setTimeout(() => {
+    try {
+      const result = await updateSubmissionOcr(
+        clientSlug,
+        initialState,
+        new FormData(event.currentTarget),
+      );
+
+      if (result.status !== "idle" && result.message) {
+        setNotice({
+          status: result.status,
+          message: result.message,
+        });
+      }
+
+      if (result.status === "success") {
         router.refresh();
-      }, 1200);
-
-      return () => window.clearTimeout(refreshTimer);
+      }
+    } catch (error) {
+      console.error("Failed to save OCR result", error);
+      setNotice({
+        status: "error",
+        message: "OCR結果の保存に失敗しました。時間をおいて再度お試しください。",
+      });
+    } finally {
+      setIsSaving(false);
     }
-  }, [router, state.status, state.updatedAt]);
+  }
 
-  const disabled = isSent || isPending;
+  const disabled = isSent || isSaving;
   const paymentMethod =
     ocrPaymentMethod || (ocrIsCreditCard ? "credit_card" : "cash");
 
   return (
     <form
       className={isSent ? "ocr-edit-form locked" : "ocr-edit-form"}
-      action={formAction}
-      onSubmit={() => setNotice(null)}
+      onSubmit={handleSubmit}
     >
       <input type="hidden" name="submissionId" value={submissionId} />
       <label className="field">
@@ -126,7 +140,7 @@ export function OcrEditForm({
           type="submit"
           disabled={disabled}
         >
-          {isPending ? (
+          {isSaving ? (
             <>
               <Loader2 className="spin-icon" size={15} />
               保存中
