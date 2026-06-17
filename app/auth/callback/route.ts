@@ -12,7 +12,7 @@ function getSafeErrorPath(value: string | null) {
   if (!value) return "/admin/login";
   if (value.startsWith("/admin/")) return "/admin/login";
 
-  const clientMatch = value.match(/^\/client\/([^/?#]+)/);
+  const clientMatch = value.match(/^\/client\/([^/?#]+)(?:\/.*)?$/);
   if (clientMatch?.[1]) return `/client/${clientMatch[1]}`;
 
   return "/admin/login";
@@ -22,8 +22,9 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const next = requestUrl.searchParams.get("next");
+  const returnTo = requestUrl.searchParams.get("returnTo");
   const safeNext = getSafeSuccessPath(next);
-  const safeErrorNext = getSafeErrorPath(next);
+  const safeErrorNext = getSafeErrorPath(returnTo || next);
 
   if (code) {
     const supabase = await createClient();
@@ -47,6 +48,6 @@ export async function GET(request: NextRequest) {
   }
 
   const errorUrl = new URL("/auth/error", requestUrl.origin);
-  errorUrl.searchParams.set("next", safeErrorNext);
+  errorUrl.searchParams.set("returnTo", safeErrorNext);
   return NextResponse.redirect(errorUrl);
 }

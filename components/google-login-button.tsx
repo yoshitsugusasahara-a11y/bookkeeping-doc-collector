@@ -6,11 +6,13 @@ import { createClient } from "@/lib/supabase/browser";
 
 type GoogleLoginButtonProps = {
   nextPath: string;
+  returnPath?: string;
   label?: string;
 };
 
 export function GoogleLoginButton({
   nextPath,
+  returnPath,
   label = "Googleでログイン",
 }: GoogleLoginButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
@@ -23,14 +25,16 @@ export function GoogleLoginButton({
     const supabase = createClient();
     await supabase.auth.signOut();
 
-    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-      nextPath,
-    )}`;
+    const callbackUrl = new URL("/auth/callback", window.location.origin);
+    callbackUrl.searchParams.set("next", nextPath);
+    if (returnPath) {
+      callbackUrl.searchParams.set("returnTo", returnPath);
+    }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo,
+        redirectTo: callbackUrl.toString(),
         queryParams: {
           prompt: "select_account",
         },

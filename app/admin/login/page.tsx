@@ -16,6 +16,7 @@ export default function AdminLoginPage() {
         </p>
         <GoogleLoginButton
           nextPath="/admin/customers"
+          returnPath="/admin/login"
           label="Googleで管理者ログイン"
         />
         <Link className="text-link" href="/">

@@ -22,6 +22,7 @@ export default async function ClientLoginPage({
         </p>
         <GoogleLoginButton
           nextPath={`/client/${clientSlug}/signup`}
+          returnPath={`/client/${clientSlug}`}
           label="Googleで顧客ログイン"
         />
         <Link className="text-link" href={`/client/${clientSlug}/submissions`}>

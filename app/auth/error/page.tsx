@@ -5,7 +5,7 @@ function getSafeReturnPath(value?: string | null) {
   if (!value) return "/admin/login";
   if (value === "/admin/login") return value;
 
-  const clientMatch = value.match(/^\/client\/([^/?#]+)$/);
+  const clientMatch = value.match(/^\/client\/([^/?#]+)(?:\/.*)?$/);
   if (clientMatch?.[1]) return `/client/${clientMatch[1]}`;
 
   return "/admin/login";
@@ -14,10 +14,10 @@ function getSafeReturnPath(value?: string | null) {
 export default async function AuthErrorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; returnTo?: string }>;
 }) {
-  const { next } = await searchParams;
-  const returnPath = getSafeReturnPath(next);
+  const { next, returnTo } = await searchParams;
+  const returnPath = getSafeReturnPath(returnTo || next);
 
   return (
     <main className="auth-shell">
