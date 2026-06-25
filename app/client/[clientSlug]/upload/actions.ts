@@ -178,9 +178,8 @@ export async function createSubmission(
   revalidatePath("/admin/customers");
   after(async () => {
     try {
-      const backgroundSupabase = await createClient();
       await processCustomerPendingOcr({
-        supabase: backgroundSupabase,
+        supabase,
         customerId: account.id,
         limit: 10,
       });
