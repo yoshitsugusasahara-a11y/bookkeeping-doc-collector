@@ -292,6 +292,33 @@ async function moveToErrorFolderIfPossible({
     .eq("id", submissionId);
 }
 
+async function moveToPrimaryFolderIfPossible({
+  supabase,
+  submissionId,
+  driveFileId,
+  primaryDriveFolderId,
+}: {
+  supabase: SupabaseClient<Database>;
+  submissionId: string;
+  driveFileId: string | null;
+  primaryDriveFolderId: string | null;
+}) {
+  if (!driveFileId || !primaryDriveFolderId || !isGoogleDriveConfigured()) return;
+
+  const movedFile = await moveDriveFile({
+    fileId: driveFileId,
+    folderId: primaryDriveFolderId,
+  });
+
+  await supabase
+    .from("submissions")
+    .update({
+      drive_file_id: movedFile.fileId,
+      drive_view_url: movedFile.viewUrl,
+    })
+    .eq("id", submissionId);
+}
+
 async function uploadToDriveIfNeeded({
   supabase,
   submission,
@@ -613,6 +640,17 @@ export async function processSubmissionToMoneyForward({
       ocr,
       customerJournalPrompt: customer.journal_prompt,
     });
+
+    try {
+      await moveToPrimaryFolderIfPossible({
+        supabase,
+        submissionId: submission.id,
+        driveFileId,
+        primaryDriveFolderId: customer.drive_folder_id,
+      });
+    } catch (moveError) {
+      console.error("Failed to move succeeded receipt back to primary folder", moveError);
+    }
 
     if (driveFileId) {
       await deleteStoredSource({
