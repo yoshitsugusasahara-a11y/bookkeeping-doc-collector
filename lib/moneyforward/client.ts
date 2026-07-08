@@ -157,14 +157,14 @@ export async function postMoneyForwardJournal({
 export async function getMoneyForwardAccounts(accessToken: string) {
   return moneyForwardAccountingFetch({
     accessToken,
-    path: "/api/v3/accounts",
+    path: "/api/v3/accounts?available=true",
   }) as Promise<{ accounts?: unknown[] }>;
 }
 
 export async function getMoneyForwardTaxes(accessToken: string) {
   return moneyForwardAccountingFetch({
     accessToken,
-    path: "/api/v3/taxes",
+    path: "/api/v3/taxes?available=true",
   }) as Promise<{ taxes?: unknown[] }>;
 }
 
