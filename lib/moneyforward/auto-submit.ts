@@ -72,11 +72,36 @@ export async function submitReceiptToMoneyForward({
     return;
   }
 
-  const refreshed = await getValidMoneyForwardAccessToken(connection);
-  const accessToken = refreshed?.access_token ?? connection.access_token;
+  let activeConnection = connection;
+  let refreshed;
+
+  try {
+    refreshed = await getValidMoneyForwardAccessToken(activeConnection);
+  } catch (refreshError) {
+    // 他の処理（Cron・手動実行など）が直前に同じrefresh_tokenを使って
+    // ローテーション済みの場合、DBには新しいトークンが保存されている。
+    // 再読込して自分の持っていたトークンと違えば、そちらでやり直す。
+    const { data: latestConnection } = await supabase
+      .from("mf_connections")
+      .select("access_token, refresh_token, token_type, scope, expires_at")
+      .eq("customer_account_id", customerAccountId)
+      .maybeSingle();
+
+    if (
+      !latestConnection ||
+      latestConnection.refresh_token === activeConnection.refresh_token
+    ) {
+      throw refreshError;
+    }
+
+    activeConnection = latestConnection;
+    refreshed = await getValidMoneyForwardAccessToken(activeConnection);
+  }
+
+  const accessToken = refreshed?.access_token ?? activeConnection.access_token;
 
   if (refreshed) {
-    await supabase
+    const { data: savedRows, error: saveError } = await supabase
       .from("mf_connections")
       .update({
         access_token: refreshed.access_token,
@@ -85,7 +110,16 @@ export async function submitReceiptToMoneyForward({
         scope: refreshed.scope,
         expires_at: refreshed.expires_at,
       })
-      .eq("customer_account_id", customerAccountId);
+      .eq("customer_account_id", customerAccountId)
+      .select("customer_account_id");
+
+    if (saveError || !savedRows || savedRows.length === 0) {
+      // 保存に失敗したまま処理を続けると、DBに残った古いrefresh_tokenが
+      // 次回以降 invalid_grant で失敗し続けるため、ここで明示的に失敗させる。
+      throw new Error(
+        `MFトークンの保存に失敗しました。${saveError?.message ?? "更新対象の連携情報が見つかりませんでした。"}`,
+      );
+    }
   }
 
   const [accountsResponse, taxesResponse] = await Promise.all([
