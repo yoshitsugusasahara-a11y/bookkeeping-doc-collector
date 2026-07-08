@@ -24,16 +24,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const results: Array<{ customerId: string; processed: number; error?: string }> = [];
+  const results: Array<{
+    customerId: string;
+    processed: number;
+    failed?: number;
+    errors?: string[];
+    error?: string;
+  }> = [];
 
   for (const customer of customers ?? []) {
     try {
-      const processed = await processCustomerPendingSubmissions({
+      const result = await processCustomerPendingSubmissions({
         supabase,
         customerId: customer.id,
         limit: 20,
       });
-      results.push({ customerId: customer.id, processed });
+      results.push({
+        customerId: customer.id,
+        processed: result.processed,
+        failed: result.failed,
+        errors: result.errors,
+      });
     } catch (processError) {
       results.push({
         customerId: customer.id,

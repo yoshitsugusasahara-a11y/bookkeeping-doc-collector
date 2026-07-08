@@ -265,21 +265,44 @@ export async function disconnectMoneyForward(formData: FormData) {
   revalidatePath("/admin/customers");
 }
 
-export async function runMoneyForwardSubmissionProcess(formData: FormData) {
+export type MfProcessState = {
+  status: "idle" | "success" | "error";
+  message: string;
+};
+
+export async function runMoneyForwardSubmissionProcess(
+  _prevState: MfProcessState,
+  formData: FormData,
+): Promise<MfProcessState> {
   const customerId = String(formData.get("customerId") || "");
 
   if (!customerId) {
-    return;
+    return { status: "error", message: "顧客情報を取得できませんでした。" };
   }
 
   const supabase = await ensureAdmin();
-  if (!supabase) return;
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
 
-  await processCustomerPendingSubmissions({
+  const { processed, failed, errors } = await processCustomerPendingSubmissions({
     supabase,
     customerId,
   });
 
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
+
+  if (failed > 0) {
+    return {
+      status: "error",
+      message: `${processed}件処理し、${failed}件失敗しました。原因: ${errors.join(" / ")}`,
+    };
+  }
+
+  if (processed === 0) {
+    return { status: "success", message: "処理対象の送信はありませんでした。" };
+  }
+
+  return { status: "success", message: `${processed}件のMF送信処理が完了しました。` };
 }

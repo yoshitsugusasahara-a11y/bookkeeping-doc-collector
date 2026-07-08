@@ -679,6 +679,7 @@ export async function processCustomerPendingSubmissions({
   if (error) throw error;
 
   let processed = 0;
+  const errors: string[] = [];
   for (const submission of submissions ?? []) {
     try {
       await processSubmissionToMoneyForward({
@@ -687,10 +688,15 @@ export async function processCustomerPendingSubmissions({
         submissionId: submission.id,
       });
       processed += 1;
-    } catch (error) {
-      console.error("Failed to process pending submission", error);
+    } catch (submissionError) {
+      console.error("Failed to process pending submission", submissionError);
+      errors.push(
+        submissionError instanceof Error
+          ? submissionError.message
+          : "処理中にエラーが発生しました。",
+      );
     }
   }
 
-  return processed;
+  return { processed, failed: errors.length, errors };
 }

@@ -1,8 +1,11 @@
 "use client";
 
+import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { Loader2, PlayCircle } from "lucide-react";
-import { runMoneyForwardSubmissionProcess } from "./actions";
+import { CheckCircle2, Loader2, PlayCircle } from "lucide-react";
+import { runMoneyForwardSubmissionProcess, type MfProcessState } from "./actions";
+
+const initialState: MfProcessState = { status: "idle", message: "" };
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -25,10 +28,25 @@ function SubmitButton() {
 }
 
 export function MfProcessForm({ customerId }: { customerId: string }) {
+  const [state, action] = useActionState(
+    runMoneyForwardSubmissionProcess,
+    initialState,
+  );
+
   return (
-    <form action={runMoneyForwardSubmissionProcess}>
+    <form action={action}>
       <input type="hidden" name="customerId" value={customerId} />
       <SubmitButton />
+      {state.status !== "idle" && (
+        <p
+          className={
+            state.status === "success" ? "form-message success" : "warning-text"
+          }
+        >
+          {state.status === "success" && <CheckCircle2 size={16} />}
+          {state.message}
+        </p>
+      )}
     </form>
   );
 }
