@@ -394,19 +394,13 @@ with check (
 );
 
 drop policy if exists "mf_connections_update_own_approved_customer" on public.mf_connections;
-create policy "mf_connections_update_own_approved_customer"
+drop policy if exists "mf_connections_update_own_or_admin" on public.mf_connections;
+create policy "mf_connections_update_own_or_admin"
 on public.mf_connections for update
 to authenticated
-using (user_id = auth.uid())
+using (user_id = auth.uid() or public.is_admin())
 with check (
-  user_id = auth.uid()
-  and exists (
-    select 1
-    from public.customer_accounts ca
-    where ca.id = customer_account_id
-      and ca.user_id = auth.uid()
-      and ca.approval_status = 'approved'
-  )
+  user_id = auth.uid() or public.is_admin()
 );
 
 drop policy if exists "mf_connections_delete_own_or_admin" on public.mf_connections;
