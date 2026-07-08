@@ -68,11 +68,14 @@ function getPaymentMethodLabel(method?: string | null, isCreditCard?: boolean | 
   return "現金";
 }
 
-function getDocumentClassificationStatusLabel(status?: string | null) {
+function getDocumentClassificationStatusLabel(
+  status: string | null | undefined,
+  hasRules: boolean,
+) {
   if (status === "completed") return "分類済み";
   if (status === "failed") return "分類失敗";
   if (status === "skipped") return "分類対象外";
-  return "分類待ち";
+  return hasRules ? "分類待ち" : "分類ルールなし";
 }
 
 function getDocumentKindLabel(kind?: string | null) {
@@ -244,6 +247,7 @@ export default async function ClientSubmissionsPage({
                       <dd>
                         {getDocumentClassificationStatusLabel(
                           item.document_classification_status,
+                          documentRuleNameById.size > 0,
                         )}
                       </dd>
                     </div>
