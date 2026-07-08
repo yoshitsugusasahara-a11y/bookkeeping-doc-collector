@@ -646,14 +646,6 @@ export async function processSubmissionToMoneyForward({
       })
       .eq("id", submission.id);
 
-    if (driveFileId) {
-      await deleteStoredSource({
-        supabase,
-        submissionId: submission.id,
-        storagePath: submission.source_storage_path,
-      });
-    }
-
     throw error;
   }
 }
