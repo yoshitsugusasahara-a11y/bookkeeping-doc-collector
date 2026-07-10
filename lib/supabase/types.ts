@@ -298,6 +298,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      activity_logs: {
+        Row: {
+          id: string;
+          created_at: string;
+          customer_account_id: string | null;
+          submission_id: string | null;
+          event_type: string;
+          status: string;
+          message: string;
+          source: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          customer_account_id?: string | null;
+          submission_id?: string | null;
+          event_type: string;
+          status: string;
+          message: string;
+          source?: string | null;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          customer_account_id?: string | null;
+          submission_id?: string | null;
+          event_type?: string;
+          status?: string;
+          message?: string;
+          source?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

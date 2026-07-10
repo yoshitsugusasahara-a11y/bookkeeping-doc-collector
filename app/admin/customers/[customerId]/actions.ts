@@ -288,6 +288,7 @@ export async function runMoneyForwardSubmissionProcess(
   const { processed, failed, errors } = await processCustomerPendingSubmissions({
     supabase,
     customerId,
+    source: "admin_manual",
   });
 
   revalidatePath(`/admin/customers/${customerId}`);
