@@ -288,16 +288,22 @@ export async function runMoneyForwardSubmissionProcess(
   const { processed, failed, errors } = await processCustomerPendingSubmissions({
     supabase,
     customerId,
+    limit: 8,
     source: "admin_manual",
   });
 
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
 
+  const moreRemainingNotice =
+    processed + failed >= 8
+      ? " 未処理分が残っている可能性があります。もう一度実行してください。"
+      : "";
+
   if (failed > 0) {
     return {
       status: "error",
-      message: `${processed}件処理し、${failed}件失敗しました。原因: ${errors.join(" / ")}`,
+      message: `${processed}件処理し、${failed}件失敗しました。原因: ${errors.join(" / ")}${moreRemainingNotice}`,
     };
   }
 
@@ -305,5 +311,8 @@ export async function runMoneyForwardSubmissionProcess(
     return { status: "success", message: "処理対象の送信はありませんでした。" };
   }
 
-  return { status: "success", message: `${processed}件のMF送信処理が完了しました。` };
+  return {
+    status: "success",
+    message: `${processed}件のMF送信処理が完了しました。${moreRemainingNotice}`,
+  };
 }

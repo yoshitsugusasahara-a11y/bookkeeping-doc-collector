@@ -29,6 +29,8 @@ import { JournalPromptForm } from "./journal-prompt-form";
 import { MfProcessForm } from "./mf-process-form";
 import { RetentionSettingsForm } from "./retention-settings-form";
 
+export const maxDuration = 60;
+
 function getFileTypeLabel(mimeType: string) {
   if (mimeType === "application/pdf") return "PDF";
   if (mimeType.includes("heic") || mimeType.includes("heif")) return "HEIC";
