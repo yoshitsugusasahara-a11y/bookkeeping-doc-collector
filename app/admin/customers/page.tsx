@@ -173,6 +173,9 @@ export default async function AdminCustomersPage() {
             顧客URLの作成、承認、利用停止、Drive設定、MF連携状況をこの画面で管理します。
           </span>
         </div>
+        <Link className="secondary-action sidebar-action" href="/admin/logs">
+          実行ログ
+        </Link>
         <form action={logoutAdmin}>
           <button className="secondary-action sidebar-action" type="submit">
             ログアウト

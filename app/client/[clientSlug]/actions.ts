@@ -143,6 +143,7 @@ export async function sendSubmissionToMoneyForward(
       supabase,
       customerId: account.id,
       submissionId,
+      source: "client_manual",
     });
   } catch (error) {
     console.error("Money Forward submission failed", error);

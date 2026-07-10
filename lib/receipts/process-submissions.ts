@@ -12,6 +12,11 @@ import {
   moveDriveFile,
   uploadFileToDrive,
 } from "@/lib/google/drive";
+import {
+  getErrorMessageForLog,
+  logActivity,
+  type ActivitySource,
+} from "@/lib/logging/activity-log";
 import { submitReceiptToMoneyForward } from "@/lib/moneyforward/auto-submit";
 import type { Database } from "@/lib/supabase/types";
 
@@ -434,6 +439,15 @@ async function classifyAndFileNonReceiptIfNeeded({
         document_processed_at: new Date().toISOString(),
       })
       .eq("id", submission.id);
+    await logActivity({
+      supabase,
+      eventType: "classification",
+      status: "error",
+      message: `${submission.file_name} の資料分類に失敗しました。${outcome.error ?? ""}`,
+      customerAccountId: submission.customer_account_id,
+      submissionId: submission.id,
+      source: "upload_background",
+    });
     return false;
   }
 
@@ -488,6 +502,15 @@ async function classifyAndFileNonReceiptIfNeeded({
           "レシート以外の資料として分類されましたが、保存先Google Driveフォルダが未設定です。",
       })
       .eq("id", submission.id);
+    await logActivity({
+      supabase,
+      eventType: "drive_upload",
+      status: "error",
+      message: `${submission.file_name} はレシート以外の資料と判定されましたが、保存先Driveフォルダが未設定のため保存できませんでした。`,
+      customerAccountId: submission.customer_account_id,
+      submissionId: submission.id,
+      source: "upload_background",
+    });
     return true;
   }
 
@@ -590,6 +613,15 @@ export async function processCustomerPendingOcr({
       processed += 1;
     } catch (error) {
       console.error("Failed to process OCR", error);
+      await logActivity({
+        supabase,
+        eventType: "ocr",
+        status: "error",
+        message: `${submission.file_name} のOCR処理に失敗しました。${getErrorMessageForLog(error)}`,
+        customerAccountId: customerId,
+        submissionId: submission.id,
+        source: "upload_background",
+      });
     }
   }
 
@@ -600,10 +632,12 @@ export async function processSubmissionToMoneyForward({
   supabase,
   customerId,
   submissionId,
+  source = null,
 }: {
   supabase: SupabaseClient<Database>;
   customerId: string;
   submissionId: string;
+  source?: ActivitySource | null;
 }) {
   const customer = await getCustomerDriveSettings({ supabase, customerId });
   const submission = await getSubmissionForProcessing({
@@ -650,6 +684,15 @@ export async function processSubmissionToMoneyForward({
       });
     } catch (moveError) {
       console.error("Failed to move succeeded receipt back to primary folder", moveError);
+      await logActivity({
+        supabase,
+        eventType: "drive_move",
+        status: "error",
+        message: `${submission.file_name} の通常フォルダへの移動に失敗しました。${getErrorMessageForLog(moveError)}`,
+        customerAccountId: customerId,
+        submissionId: submission.id,
+        source,
+      });
     }
 
     if (driveFileId) {
@@ -659,6 +702,16 @@ export async function processSubmissionToMoneyForward({
         storagePath: submission.source_storage_path,
       });
     }
+
+    await logActivity({
+      supabase,
+      eventType: "mf_submit",
+      status: "success",
+      message: `${submission.file_name} をマネーフォワードへ送信しました。`,
+      customerAccountId: customerId,
+      submissionId: submission.id,
+      source,
+    });
   } catch (error) {
     console.error("Failed to send receipt to Money Forward", error);
 
@@ -671,6 +724,15 @@ export async function processSubmissionToMoneyForward({
       });
     } catch (moveError) {
       console.error("Failed to move failed receipt to error folder", moveError);
+      await logActivity({
+        supabase,
+        eventType: "drive_move",
+        status: "error",
+        message: `${submission.file_name} のエラーフォルダへの移動に失敗しました。${getErrorMessageForLog(moveError)}`,
+        customerAccountId: customerId,
+        submissionId: submission.id,
+        source,
+      });
     }
 
     await supabase
@@ -684,6 +746,16 @@ export async function processSubmissionToMoneyForward({
       })
       .eq("id", submission.id);
 
+    await logActivity({
+      supabase,
+      eventType: "mf_submit",
+      status: "error",
+      message: `${submission.file_name} のマネーフォワード送信に失敗しました。${getErrorMessageForLog(error)}`,
+      customerAccountId: customerId,
+      submissionId: submission.id,
+      source,
+    });
+
     throw error;
   }
 }
@@ -692,10 +764,12 @@ export async function processCustomerPendingSubmissions({
   supabase,
   customerId,
   limit = 20,
+  source = null,
 }: {
   supabase: SupabaseClient<Database>;
   customerId: string;
   limit?: number;
+  source?: ActivitySource | null;
 }) {
   const { data: submissions, error } = await supabase
     .from("submissions")
@@ -716,6 +790,7 @@ export async function processCustomerPendingSubmissions({
         supabase,
         customerId,
         submissionId: submission.id,
+        source,
       });
       processed += 1;
     } catch (submissionError) {

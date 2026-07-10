@@ -442,3 +442,41 @@ create policy "document_rules_delete_admin"
 on public.document_rules for delete
 to authenticated
 using (public.is_admin());
+
+create table if not exists public.activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  customer_account_id uuid references public.customer_accounts(id) on delete set null,
+  submission_id uuid references public.submissions(id) on delete set null,
+  event_type text not null,
+  status text not null check (status in ('success', 'error')),
+  message text not null,
+  source text
+);
+
+create index if not exists activity_logs_created_at_idx
+  on public.activity_logs(created_at desc);
+
+alter table public.activity_logs enable row level security;
+
+grant select, insert on public.activity_logs to authenticated;
+
+drop policy if exists "activity_logs_select_admin" on public.activity_logs;
+create policy "activity_logs_select_admin"
+on public.activity_logs for select
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "activity_logs_insert_own_or_admin" on public.activity_logs;
+create policy "activity_logs_insert_own_or_admin"
+on public.activity_logs for insert
+to authenticated
+with check (
+  public.is_admin()
+  or exists (
+    select 1
+    from public.customer_accounts ca
+    where ca.id = customer_account_id
+      and ca.user_id = auth.uid()
+  )
+);
