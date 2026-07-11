@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { processCustomerPendingSubmissions } from "@/lib/receipts/process-submissions";
+import { processSubmissionToMoneyForward } from "@/lib/receipts/process-submissions";
 import {
   cleanupCustomerOldSubmissions,
   normalizeSubmissionRetentionLimit,
@@ -265,17 +265,18 @@ export async function disconnectMoneyForward(formData: FormData) {
   revalidatePath("/admin/customers");
 }
 
-export type MfProcessState = {
-  status: "idle" | "success" | "error";
-  message: string;
+export type PendingMfSubmission = {
+  id: string;
+  fileName: string;
 };
 
-export async function runMoneyForwardSubmissionProcess(
-  _prevState: MfProcessState,
-  formData: FormData,
-): Promise<MfProcessState> {
-  const customerId = String(formData.get("customerId") || "");
+export type PendingMfSubmissionsResult =
+  | { status: "ok"; submissions: PendingMfSubmission[] }
+  | { status: "error"; message: string };
 
+export async function listPendingMfSubmissions(
+  customerId: string,
+): Promise<PendingMfSubmissionsResult> {
   if (!customerId) {
     return { status: "error", message: "顧客情報を取得できませんでした。" };
   }
@@ -285,34 +286,53 @@ export async function runMoneyForwardSubmissionProcess(
     return { status: "error", message: "管理者権限を確認できませんでした。" };
   }
 
-  const { processed, failed, errors } = await processCustomerPendingSubmissions({
-    supabase,
-    customerId,
-    limit: 8,
-    source: "admin_manual",
-  });
+  const { data, error } = await supabase
+    .from("submissions")
+    .select("id, file_name")
+    .eq("customer_account_id", customerId)
+    .neq("mf_status", "sent")
+    .not("source_storage_path", "is", null)
+    .order("submitted_at", { ascending: true })
+    .limit(100);
 
-  revalidatePath(`/admin/customers/${customerId}`);
-  revalidatePath("/admin/customers");
-
-  const moreRemainingNotice =
-    processed + failed >= 8
-      ? " 未処理分が残っている可能性があります。もう一度実行してください。"
-      : "";
-
-  if (failed > 0) {
+  if (error) {
     return {
       status: "error",
-      message: `${processed}件処理し、${failed}件失敗しました。原因: ${errors.join(" / ")}${moreRemainingNotice}`,
+      message: `処理対象の取得に失敗しました。${error.message}`,
     };
   }
 
-  if (processed === 0) {
-    return { status: "success", message: "処理対象の送信はありませんでした。" };
+  return {
+    status: "ok",
+    submissions: (data ?? []).map((row) => ({
+      id: row.id,
+      fileName: row.file_name,
+    })),
+  };
+}
+
+export async function processSingleMfSubmission(
+  customerId: string,
+  submissionId: string,
+): Promise<{ status: "success" | "error"; message: string }> {
+  if (!customerId || !submissionId) {
+    return { status: "error", message: "処理対象を特定できませんでした。" };
   }
 
-  return {
-    status: "success",
-    message: `${processed}件のMF送信処理が完了しました。${moreRemainingNotice}`,
-  };
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  try {
+    await processSubmissionToMoneyForward({
+      supabase,
+      customerId,
+      submissionId,
+      source: "admin_manual",
+    });
+    return { status: "success", message: "送信しました。" };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
+  }
 }

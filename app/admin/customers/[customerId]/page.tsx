@@ -499,7 +499,7 @@ export default async function AdminCustomerDetailPage({
               <p className="eyebrow">Batch Process</p>
               <h2>MF送信処理</h2>
               <p className="muted">
-                未処理の送信分について、Google Drive保存、OCR解析、MF仕訳送信、証憑添付をまとめて実行します。
+                未処理の送信分について、Google Drive保存、OCR解析、MF仕訳送信、証憑添付を1件ずつ順番に実行します。進捗と結果は下に表示されます。
               </p>
             </div>
           </div>
