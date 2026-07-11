@@ -1,12 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2 } from "lucide-react";
-import {
-  type DriveSettingsState,
-  updateCustomerDriveSettings,
-} from "./actions";
+import { updateCustomerDriveSettings, type DriveSettingsState } from "./actions";
 
 type DriveSettingsFormProps = {
   customerId: string;
@@ -21,23 +18,6 @@ const initialState: DriveSettingsState = {
   message: "",
 };
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-
-  return (
-    <button className="primary-action" type="submit" disabled={pending}>
-      {pending ? (
-        <>
-          <Loader2 className="spin-icon" size={18} />
-          保存中です
-        </>
-      ) : (
-        "Drive設定を保存"
-      )}
-    </button>
-  );
-}
-
 export function DriveSettingsForm({
   customerId,
   driveFolderId,
@@ -45,13 +25,40 @@ export function DriveSettingsForm({
   errorDriveFolderId,
   errorDriveFolderName,
 }: DriveSettingsFormProps) {
-  const [state, action] = useActionState(
-    updateCustomerDriveSettings,
-    initialState,
-  );
+  const router = useRouter();
+  const [isSaving, setIsSaving] = useState(false);
+  const [state, setState] = useState<DriveSettingsState>(initialState);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isSaving) return;
+
+    setState(initialState);
+    setIsSaving(true);
+
+    try {
+      const result = await updateCustomerDriveSettings(
+        initialState,
+        new FormData(event.currentTarget),
+      );
+      setState(result);
+
+      if (result.status === "success") {
+        router.refresh();
+      }
+    } catch (error) {
+      console.error("Failed to save Drive settings", error);
+      setState({
+        status: "error",
+        message: "Drive設定の保存に失敗しました。時間をおいて再度お試しください。",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
-    <form className="drive-form" action={action}>
+    <form className="drive-form" onSubmit={handleSubmit}>
       <input type="hidden" name="customerId" value={customerId} />
       <label className="field">
         <span>保存先フォルダID</span>
@@ -59,6 +66,7 @@ export function DriveSettingsForm({
           name="driveFolderId"
           defaultValue={driveFolderId || ""}
           placeholder="例: 1AbCdEfGhIjKlMnOpQrStUvWxYz"
+          disabled={isSaving}
         />
       </label>
       <label className="field">
@@ -67,6 +75,7 @@ export function DriveSettingsForm({
           name="driveFolderName"
           defaultValue={driveFolderName || ""}
           placeholder="例: 東京商会 証憑フォルダ"
+          disabled={isSaving}
         />
       </label>
       <label className="field">
@@ -75,6 +84,7 @@ export function DriveSettingsForm({
           name="errorDriveFolderId"
           defaultValue={errorDriveFolderId || ""}
           placeholder="例: エラー証憑用のGoogle DriveフォルダID"
+          disabled={isSaving}
         />
       </label>
       <label className="field">
@@ -83,9 +93,19 @@ export function DriveSettingsForm({
           name="errorDriveFolderName"
           defaultValue={errorDriveFolderName || ""}
           placeholder="例: 東京商会 エラー証憑フォルダ"
+          disabled={isSaving}
         />
       </label>
-      <SubmitButton />
+      <button className="primary-action" type="submit" disabled={isSaving}>
+        {isSaving ? (
+          <>
+            <Loader2 className="spin-icon" size={18} />
+            保存中です
+          </>
+        ) : (
+          "Drive設定を保存"
+        )}
+      </button>
       {state.status !== "idle" && (
         <p
           className={

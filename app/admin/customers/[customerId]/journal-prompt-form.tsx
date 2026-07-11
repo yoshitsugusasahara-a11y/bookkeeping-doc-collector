@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, Save } from "lucide-react";
 import {
   type JournalPromptState,
@@ -18,37 +18,44 @@ const initialState: JournalPromptState = {
   message: "",
 };
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-
-  return (
-    <button className="primary-action" type="submit" disabled={pending}>
-      {pending ? (
-        <>
-          <Loader2 className="spin-icon" size={18} />
-          保存中です
-        </>
-      ) : (
-        <>
-          <Save size={18} />
-          仕訳生成指示を保存
-        </>
-      )}
-    </button>
-  );
-}
-
 export function JournalPromptForm({
   customerId,
   journalPrompt,
 }: JournalPromptFormProps) {
-  const [state, action] = useActionState(
-    updateCustomerJournalPrompt,
-    initialState,
-  );
+  const router = useRouter();
+  const [isSaving, setIsSaving] = useState(false);
+  const [state, setState] = useState<JournalPromptState>(initialState);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isSaving) return;
+
+    setState(initialState);
+    setIsSaving(true);
+
+    try {
+      const result = await updateCustomerJournalPrompt(
+        initialState,
+        new FormData(event.currentTarget),
+      );
+      setState(result);
+
+      if (result.status === "success") {
+        router.refresh();
+      }
+    } catch (error) {
+      console.error("Failed to save journal prompt", error);
+      setState({
+        status: "error",
+        message: "仕訳生成指示の保存に失敗しました。時間をおいて再度お試しください。",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
-    <form className="drive-form" action={action}>
+    <form className="drive-form" onSubmit={handleSubmit}>
       <input type="hidden" name="customerId" value={customerId} />
       <label className="field">
         <span>仕訳生成指示</span>
@@ -57,6 +64,7 @@ export function JournalPromptForm({
           defaultValue={journalPrompt || ""}
           placeholder="例: 貸方科目は事業主借とする。判断が難しい仕訳にはタグとして「要確認」をつける。"
           rows={7}
+          disabled={isSaving}
         />
       </label>
       <div className="prompt-examples">
@@ -67,7 +75,19 @@ export function JournalPromptForm({
           <li>仕訳の判断が難しい場合はタグとして「要確認」をつける。</li>
         </ul>
       </div>
-      <SubmitButton />
+      <button className="primary-action" type="submit" disabled={isSaving}>
+        {isSaving ? (
+          <>
+            <Loader2 className="spin-icon" size={18} />
+            保存中です
+          </>
+        ) : (
+          <>
+            <Save size={18} />
+            仕訳生成指示を保存
+          </>
+        )}
+      </button>
       {state.status !== "idle" && (
         <p
           className={

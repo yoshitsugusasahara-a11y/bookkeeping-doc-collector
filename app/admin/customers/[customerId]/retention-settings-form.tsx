@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, DatabaseZap, Loader2 } from "lucide-react";
 import {
   type RetentionSettingsState,
@@ -18,37 +18,44 @@ const initialState: RetentionSettingsState = {
   message: "",
 };
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-
-  return (
-    <button className="primary-action" type="submit" disabled={pending}>
-      {pending ? (
-        <>
-          <Loader2 className="spin-icon" size={18} />
-          保存・整理中です
-        </>
-      ) : (
-        <>
-          <DatabaseZap size={18} />
-          保存上限を保存
-        </>
-      )}
-    </button>
-  );
-}
-
 export function RetentionSettingsForm({
   customerId,
   submissionRetentionLimit,
 }: RetentionSettingsFormProps) {
-  const [state, action] = useActionState(
-    updateCustomerRetentionSettings,
-    initialState,
-  );
+  const router = useRouter();
+  const [isSaving, setIsSaving] = useState(false);
+  const [state, setState] = useState<RetentionSettingsState>(initialState);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isSaving) return;
+
+    setState(initialState);
+    setIsSaving(true);
+
+    try {
+      const result = await updateCustomerRetentionSettings(
+        initialState,
+        new FormData(event.currentTarget),
+      );
+      setState(result);
+
+      if (result.status === "success") {
+        router.refresh();
+      }
+    } catch (error) {
+      console.error("Failed to save retention settings", error);
+      setState({
+        status: "error",
+        message: "保存上限の保存に失敗しました。時間をおいて再度お試しください。",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
-    <form className="drive-form" action={action}>
+    <form className="drive-form" onSubmit={handleSubmit}>
       <input type="hidden" name="customerId" value={customerId} />
       <label className="field">
         <span>アプリ内に残す資料数</span>
@@ -59,13 +66,26 @@ export function RetentionSettingsForm({
           max={5000}
           step={1}
           defaultValue={submissionRetentionLimit}
+          disabled={isSaving}
         />
       </label>
       <p className="muted">
         上限を超えた古い履歴、サムネイル、一時保存ファイルをSupabaseから削除します。
         Google Driveに保存済みのファイルは削除しません。
       </p>
-      <SubmitButton />
+      <button className="primary-action" type="submit" disabled={isSaving}>
+        {isSaving ? (
+          <>
+            <Loader2 className="spin-icon" size={18} />
+            保存・整理中です
+          </>
+        ) : (
+          <>
+            <DatabaseZap size={18} />
+            保存上限を保存
+          </>
+        )}
+      </button>
       {state.status !== "idle" && (
         <p
           className={
