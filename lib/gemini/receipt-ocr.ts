@@ -76,16 +76,18 @@ function normalizeOcrResult(value: unknown): ReceiptOcrResult {
 
   const rawPaymentMethod =
     typeof record.payment_method === "string" ? record.payment_method : null;
-  const paymentMethod =
-    rawPaymentMethod === "credit_card"
-      ? "credit_card"
-      : rawPaymentMethod === "cashless"
-        ? "cashless"
+  const isCreditCardRaw =
+    typeof record.is_credit_card === "boolean" ? record.is_credit_card : null;
+
+  // Gemini often omits payment_method and only returns is_credit_card, so
+  // fall back to deriving payment_method from that boolean when the string
+  // field itself isn't present.
+  const paymentMethod: "cash" | "credit_card" | "cashless" =
+    rawPaymentMethod === "credit_card" || rawPaymentMethod === "cashless"
+      ? rawPaymentMethod
+      : isCreditCardRaw === true
+        ? "credit_card"
         : "cash";
-  const isCreditCard =
-    typeof record.is_credit_card === "boolean"
-      ? record.is_credit_card
-      : paymentMethod === "credit_card";
 
   return {
     date: typeof record.date === "string" && record.date ? record.date : null,
@@ -96,7 +98,7 @@ function normalizeOcrResult(value: unknown): ReceiptOcrResult {
         ? record.summary.slice(0, 15)
         : null,
     payment_method: paymentMethod,
-    is_credit_card: paymentMethod === "credit_card" && isCreditCard,
+    is_credit_card: paymentMethod === "credit_card",
   };
 }
 
@@ -154,7 +156,7 @@ export async function analyzeReceiptWithGemini({
                     "日付は YYYY-MM-DD 形式にしてください。年が不明な場合は null にしてください。",
                     "支払方法がクレジットカード、カード、VISA、Mastercard、JCB、AMEX、交通系IC等なら is_credit_card を true、現金なら false、不明なら null にしてください。",
                     `ユーザー入力の取引内容: ${transactionNote}`,
-                    '返却形式: { "date": "YYYY-MM-DD", "amount": 1500, "store": "店舗名", "summary": "購入品目要約", "is_credit_card": true }',
+                    '返却形式: { "date": "YYYY-MM-DD", "amount": 1500, "store": "店舗名", "summary": "購入品目要約", "payment_method": "credit_card", "is_credit_card": true }',
                   ].join("\n"),
                 },
                 {
