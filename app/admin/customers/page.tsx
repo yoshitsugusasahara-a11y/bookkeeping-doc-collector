@@ -39,6 +39,7 @@ function formatAdminDateTime(value?: string | null) {
   return new Intl.DateTimeFormat("ja-JP", {
     dateStyle: "short",
     timeStyle: "short",
+    timeZone: "Asia/Tokyo",
   }).format(new Date(value));
 }
 
