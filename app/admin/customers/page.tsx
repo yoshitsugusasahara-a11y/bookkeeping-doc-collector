@@ -7,14 +7,9 @@ import {
 } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import {
-  approveCustomerAccount,
-  deleteCustomerAccount,
-  logoutAdmin,
-  resumeCustomerAccount,
-  suspendCustomerAccount,
-} from "./actions";
+import { deleteCustomerAccount, logoutAdmin } from "./actions";
 import { CustomerAccountActionButton } from "./customer-account-action-button";
+import { CustomerAccountToggleButton } from "./customer-account-toggle-button";
 import { CustomerUrlBuilder, CustomerUrlTools } from "./customer-url-builder";
 
 type CustomerRow = {
@@ -283,44 +278,26 @@ export default async function AdminCustomersPage() {
                 </strong>
                 <div className="row-actions">
                   {canApprove && (
-                    <form action={approveCustomerAccount}>
-                      <input
-                        type="hidden"
-                        name="accountId"
-                        value={customer.id}
-                      />
-                      <CustomerAccountActionButton
-                        action="approve"
-                        className="small-button"
-                      />
-                    </form>
+                    <CustomerAccountToggleButton
+                      action="approve"
+                      accountId={customer.id}
+                      className="small-button"
+                    />
                   )}
                   {isApproved && (
-                    <form action={suspendCustomerAccount}>
-                      <input
-                        type="hidden"
-                        name="accountId"
-                        value={customer.id}
-                      />
-                      <CustomerAccountActionButton
-                        action="suspend"
-                        className="danger-action compact-action"
-                      />
-                    </form>
+                    <CustomerAccountToggleButton
+                      action="suspend"
+                      accountId={customer.id}
+                      className="danger-action compact-action"
+                    />
                   )}
                   {isSuspended && (
                     <>
-                      <form action={resumeCustomerAccount}>
-                        <input
-                          type="hidden"
-                          name="accountId"
-                          value={customer.id}
-                        />
-                        <CustomerAccountActionButton
-                          action="resume"
-                          className="small-button"
-                        />
-                      </form>
+                      <CustomerAccountToggleButton
+                        action="resume"
+                        accountId={customer.id}
+                        className="small-button"
+                      />
                       <form
                         className="delete-confirm-form"
                         action={deleteCustomerAccount}

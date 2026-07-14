@@ -6,19 +6,16 @@ import {
   ExternalLink,
   FileText,
   ImageIcon,
-  Link2Off,
   ShieldCheck,
 } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { DeleteSubmissionButton } from "@/components/delete-submission-button";
-import { disconnectMoneyForward, hideSubmission } from "./actions";
-import {
-  deleteCustomerAccount,
-  resumeCustomerAccount,
-  suspendCustomerAccount,
-} from "../actions";
+import { hideSubmission } from "./actions";
+import { deleteCustomerAccount } from "../actions";
 import { CustomerAccountActionButton } from "../customer-account-action-button";
+import { CustomerAccountToggleButton } from "../customer-account-toggle-button";
+import { DisconnectMfButton } from "./disconnect-mf-button";
 import { DocumentRuleActions } from "./document-rule-actions";
 import { DocumentRuleForm } from "./document-rule-form";
 import { DriveSettingsForm } from "./drive-settings-form";
@@ -317,23 +314,19 @@ export default async function AdminCustomerDetailPage({
         </div>
         <div className="account-control-actions">
           {isApproved && (
-            <form action={suspendCustomerAccount}>
-              <input type="hidden" name="accountId" value={customer.id} />
-              <CustomerAccountActionButton
-                action="suspend"
-                className="danger-action"
-              />
-            </form>
+            <CustomerAccountToggleButton
+              action="suspend"
+              accountId={customer.id}
+              className="danger-action"
+            />
           )}
           {isSuspended && (
             <>
-              <form action={resumeCustomerAccount}>
-                <input type="hidden" name="accountId" value={customer.id} />
-                <CustomerAccountActionButton
-                  action="resume"
-                  className="primary-action"
-                />
-              </form>
+              <CustomerAccountToggleButton
+                action="resume"
+                accountId={customer.id}
+                className="primary-action"
+              />
               <form className="delete-confirm-form" action={deleteCustomerAccount}>
                 <input type="hidden" name="accountId" value={customer.id} />
                 <label>
@@ -391,13 +384,7 @@ export default async function AdminCustomerDetailPage({
                 <dd>{formatAdminDateTime(mfConnection.expires_at)}</dd>
               </div>
             </dl>
-            <form action={disconnectMoneyForward}>
-              <input type="hidden" name="customerId" value={customer.id} />
-              <button className="danger-action" type="submit">
-                <Link2Off size={18} />
-                MF連携を解除
-              </button>
-            </form>
+            <DisconnectMfButton customerId={customer.id} />
             <p className="muted">
               解除すると、このアプリから当該顧客のMFへ送信できなくなります。MF側の連携中アプリ一覧でも、必要に応じて連携解除してください。
             </p>
@@ -676,11 +663,9 @@ export default async function AdminCustomerDetailPage({
                   <small className="warning-text">MF: {item.mf_error}</small>
                 )}
                 {item.mf_status !== "sent" && (
-                  <form action={hideSubmission}>
-                    <input type="hidden" name="customerId" value={customer.id} />
-                    <input type="hidden" name="submissionId" value={item.id} />
-                    <DeleteSubmissionButton />
-                  </form>
+                  <DeleteSubmissionButton
+                    onDelete={() => hideSubmission(customer.id, item.id)}
+                  />
                 )}
               </div>
             </article>

@@ -335,16 +335,14 @@ export default async function ClientSubmissionsPage({
                     </div>
                   </dl>
 
-                  <form
-                    className="action-row"
-                    action={sendSubmissionToMoneyForward.bind(null, clientSlug)}
-                  >
-                    <input type="hidden" name="submissionId" value={item.id} />
+                  <div className="action-row">
                     <MoneyForwardSendButton
+                      clientSlug={clientSlug}
+                      submissionId={item.id}
                       disabled={!canSendToMf}
                       completed={isSent}
                     />
-                  </form>
+                  </div>
                 </div>
 
                 {item.ocr_error && (
@@ -354,12 +352,11 @@ export default async function ClientSubmissionsPage({
                   <small className="warning-text">MF: {item.mf_error}</small>
                 )}
                 {!isSent && (
-                  <form
-                    action={hideSubmissionAsCustomer.bind(null, clientSlug)}
-                  >
-                    <input type="hidden" name="submissionId" value={item.id} />
-                    <DeleteSubmissionButton />
-                  </form>
+                  <DeleteSubmissionButton
+                    onDelete={() =>
+                      hideSubmissionAsCustomer(clientSlug, item.id)
+                    }
+                  />
                 )}
               </div>
             </article>

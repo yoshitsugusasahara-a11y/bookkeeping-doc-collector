@@ -264,9 +264,7 @@ export async function updateCustomerRetentionSettings(
 }
 
 
-export async function disconnectMoneyForward(formData: FormData) {
-  const customerId = String(formData.get("customerId") || "");
-
+export async function disconnectMoneyForward(customerId: string) {
   if (!customerId) {
     return;
   }
@@ -356,10 +354,7 @@ export async function processSingleMfSubmission(
   }
 }
 
-export async function hideSubmission(formData: FormData) {
-  const customerId = String(formData.get("customerId") || "");
-  const submissionId = String(formData.get("submissionId") || "");
-
+export async function hideSubmission(customerId: string, submissionId: string) {
   if (!customerId || !submissionId) return;
 
   const supabase = await ensureAdmin();
@@ -376,10 +371,10 @@ export async function hideSubmission(formData: FormData) {
   revalidatePath(`/admin/customers/${customerId}/trash`);
 }
 
-export async function restoreSubmission(formData: FormData) {
-  const customerId = String(formData.get("customerId") || "");
-  const submissionId = String(formData.get("submissionId") || "");
-
+export async function restoreSubmission(
+  customerId: string,
+  submissionId: string,
+) {
   if (!customerId || !submissionId) return;
 
   const supabase = await ensureAdmin();

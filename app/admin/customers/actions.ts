@@ -40,9 +40,7 @@ async function removeStorageFiles({
   }
 }
 
-export async function approveCustomerAccount(formData: FormData) {
-  const accountId = String(formData.get("accountId") || "");
-
+export async function approveCustomerAccount(accountId: string) {
   if (!accountId) {
     return;
   }
@@ -61,9 +59,7 @@ export async function approveCustomerAccount(formData: FormData) {
   revalidatePath("/admin/customers");
 }
 
-export async function suspendCustomerAccount(formData: FormData) {
-  const accountId = String(formData.get("accountId") || "");
-
+export async function suspendCustomerAccount(accountId: string) {
   if (!accountId) return;
 
   const supabase = await ensureAdmin();
@@ -83,9 +79,7 @@ export async function suspendCustomerAccount(formData: FormData) {
   revalidatePath(`/admin/customers/${accountId}`);
 }
 
-export async function resumeCustomerAccount(formData: FormData) {
-  const accountId = String(formData.get("accountId") || "");
-
+export async function resumeCustomerAccount(accountId: string) {
   if (!accountId) return;
 
   const supabase = await ensureAdmin();

@@ -131,10 +131,11 @@ export async function updateSubmissionOcr(
 
 export async function sendSubmissionToMoneyForward(
   clientSlug: string,
-  formData: FormData,
-) {
-  const submissionId = String(formData.get("submissionId") || "");
-  if (!submissionId) return;
+  submissionId: string,
+): Promise<{ status: "success" | "error"; message?: string }> {
+  if (!submissionId) {
+    return { status: "error", message: "対象の資料を確認できませんでした。" };
+  }
 
   const { supabase, account } = await getApprovedClientAccount(clientSlug);
 
@@ -145,19 +146,27 @@ export async function sendSubmissionToMoneyForward(
       submissionId,
       source: "client_manual",
     });
+    revalidatePath(`/client/${clientSlug}/submissions`);
+    revalidatePath("/admin/customers");
+    return { status: "success" };
   } catch (error) {
     console.error("Money Forward submission failed", error);
+    revalidatePath(`/client/${clientSlug}/submissions`);
+    revalidatePath("/admin/customers");
+    return {
+      status: "error",
+      message:
+        error instanceof Error
+          ? error.message
+          : "マネーフォワードへの送信に失敗しました。",
+    };
   }
-
-  revalidatePath(`/client/${clientSlug}/submissions`);
-  revalidatePath("/admin/customers");
 }
 
 export async function hideSubmissionAsCustomer(
   clientSlug: string,
-  formData: FormData,
+  submissionId: string,
 ) {
-  const submissionId = String(formData.get("submissionId") || "");
   if (!submissionId) return;
 
   const { supabase, account } = await getApprovedClientAccount(clientSlug);

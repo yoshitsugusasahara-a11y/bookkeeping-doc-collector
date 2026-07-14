@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, RotateCcw, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ExternalLink, ShieldCheck } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { restoreSubmission } from "../actions";
+import { RestoreSubmissionButton } from "../restore-submission-button";
 
 function formatSubmittedAt(value: string) {
   return new Intl.DateTimeFormat("ja-JP", {
@@ -132,14 +132,10 @@ export default async function AdminCustomerTrashPage({
                   Driveで開く
                 </a>
               )}
-              <form action={restoreSubmission}>
-                <input type="hidden" name="customerId" value={customer.id} />
-                <input type="hidden" name="submissionId" value={item.id} />
-                <button className="secondary-action compact-action" type="submit">
-                  <RotateCcw size={16} />
-                  復元する
-                </button>
-              </form>
+              <RestoreSubmissionButton
+                customerId={customer.id}
+                submissionId={item.id}
+              />
             </div>
           </article>
         ))}

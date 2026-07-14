@@ -1,16 +1,47 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
 import { Loader2, Send } from "lucide-react";
+import { sendSubmissionToMoneyForward } from "../actions";
 
-function MfSendButton({
+export function MoneyForwardSendButton({
+  clientSlug,
+  submissionId,
   disabled,
-  completed,
+  completed = false,
 }: {
+  clientSlug: string;
+  submissionId: string;
   disabled: boolean;
-  completed: boolean;
+  completed?: boolean;
 }) {
-  const { pending } = useFormStatus();
+  const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleClick() {
+    if (isSending) return;
+    setError(null);
+    setIsSending(true);
+
+    try {
+      const result = await sendSubmissionToMoneyForward(
+        clientSlug,
+        submissionId,
+      );
+
+      if (result.status === "success") {
+        window.location.reload();
+        return;
+      }
+
+      setError(result.message || "マネーフォワードへの送信に失敗しました。");
+    } catch (sendError) {
+      console.error("Failed to send to Money Forward", sendError);
+      setError("マネーフォワードへの送信に失敗しました。時間をおいて再度お試しください。");
+    } finally {
+      setIsSending(false);
+    }
+  }
 
   if (disabled) {
     return (
@@ -26,28 +57,26 @@ function MfSendButton({
   }
 
   return (
-    <button className="primary-action compact" type="submit" disabled={pending}>
-      {pending ? (
-        <>
-          <Loader2 className="spin-icon" size={15} />
-          MF送信中
-        </>
-      ) : (
-        <>
-          <Send size={15} />
-          MF送信
-        </>
-      )}
-    </button>
+    <div>
+      <button
+        className="primary-action compact"
+        type="button"
+        onClick={handleClick}
+        disabled={isSending}
+      >
+        {isSending ? (
+          <>
+            <Loader2 className="spin-icon" size={15} />
+            MF送信中
+          </>
+        ) : (
+          <>
+            <Send size={15} />
+            MF送信
+          </>
+        )}
+      </button>
+      {error && <small className="warning-text">{error}</small>}
+    </div>
   );
-}
-
-export function MoneyForwardSendButton({
-  disabled,
-  completed = false,
-}: {
-  disabled: boolean;
-  completed?: boolean;
-}) {
-  return <MfSendButton disabled={disabled} completed={completed} />;
 }
