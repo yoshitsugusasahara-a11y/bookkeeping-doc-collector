@@ -522,24 +522,24 @@ export default async function AdminCustomerDetailPage({
 
         <section className="settings-panel" aria-label="送信履歴の絞り込み">
           <div className="account-control-actions">
-            <Link
+            <a
               className={unsentOnly ? "secondary-action" : "primary-action"}
               href={`/admin/customers/${customer.id}`}
             >
               すべて表示
-            </Link>
-            <Link
+            </a>
+            <a
               className={unsentOnly ? "primary-action" : "secondary-action"}
               href={`/admin/customers/${customer.id}?filter=unsent`}
             >
               未送信のみ表示
-            </Link>
-            <Link
+            </a>
+            <a
               className="secondary-action"
               href={`/admin/customers/${customer.id}/trash`}
             >
               ゴミ箱を見る
-            </Link>
+            </a>
           </div>
         </section>
 
