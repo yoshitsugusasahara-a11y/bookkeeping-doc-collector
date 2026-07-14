@@ -232,6 +232,29 @@ export default async function AdminCustomerDetailPage({
   const { data: submissionRows } = await submissionQuery;
   const submissions = submissionRows ?? [];
 
+  const [
+    { count: allCount },
+    { count: unsentCount },
+    { count: trashCount },
+  ] = await Promise.all([
+    supabase
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_account_id", customer.id)
+      .is("hidden_at", null),
+    supabase
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_account_id", customer.id)
+      .is("hidden_at", null)
+      .neq("mf_status", "sent"),
+    supabase
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_account_id", customer.id)
+      .not("hidden_at", "is", null),
+  ]);
+
   const { data: mfConnection } = await supabase
     .from("mf_connections")
     .select("connected_at, expires_at, scope")
@@ -527,19 +550,19 @@ export default async function AdminCustomerDetailPage({
               className={unsentOnly ? "secondary-action" : "primary-action"}
               href={`/admin/customers/${customer.id}`}
             >
-              すべて表示
+              すべて表示（{allCount ?? 0}）
             </a>
             <a
               className={unsentOnly ? "primary-action" : "secondary-action"}
               href={`/admin/customers/${customer.id}?filter=unsent`}
             >
-              未送信のみ表示
+              未送信のみ表示（{unsentCount ?? 0}）
             </a>
             <a
               className="secondary-action"
               href={`/admin/customers/${customer.id}/trash`}
             >
-              ゴミ箱を見る
+              ゴミ箱を見る（{trashCount ?? 0}）
             </a>
           </div>
         </section>
