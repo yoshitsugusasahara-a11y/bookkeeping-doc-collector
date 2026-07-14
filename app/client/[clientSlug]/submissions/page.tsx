@@ -353,9 +353,8 @@ export default async function ClientSubmissionsPage({
                 )}
                 {!isSent && (
                   <DeleteSubmissionButton
-                    onDelete={() =>
-                      hideSubmissionAsCustomer(clientSlug, item.id)
-                    }
+                    action={hideSubmissionAsCustomer}
+                    args={[clientSlug, item.id]}
                   />
                 )}
               </div>

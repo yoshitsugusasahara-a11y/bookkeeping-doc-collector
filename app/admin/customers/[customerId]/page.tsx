@@ -664,7 +664,8 @@ export default async function AdminCustomerDetailPage({
                 )}
                 {item.mf_status !== "sent" && (
                   <DeleteSubmissionButton
-                    onDelete={() => hideSubmission(customer.id, item.id)}
+                    action={hideSubmission}
+                    args={[customer.id, item.id]}
                   />
                 )}
               </div>

@@ -4,10 +4,12 @@ import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 
 export function DeleteSubmissionButton({
-  onDelete,
+  action,
+  args,
   label = "この送信履歴を削除",
 }: {
-  onDelete: () => Promise<void>;
+  action: (arg1: string, arg2: string) => Promise<void>;
+  args: [string, string];
   label?: string;
 }) {
   const [isDeleting, setIsDeleting] = useState(false);
@@ -24,7 +26,7 @@ export function DeleteSubmissionButton({
 
     setIsDeleting(true);
     try {
-      await onDelete();
+      await action(args[0], args[1]);
       window.location.reload();
     } catch (error) {
       console.error("Failed to delete submission", error);
