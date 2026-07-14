@@ -1,14 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, PlusCircle } from "lucide-react";
 import { createDocumentRule, type DocumentRuleState } from "./actions";
 
 const initialState: DocumentRuleState = { status: "idle", message: "" };
 
 export function DocumentRuleForm({ customerId }: { customerId: string }) {
-  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [state, setState] = useState<DocumentRuleState>(initialState);
@@ -28,7 +26,8 @@ export function DocumentRuleForm({ customerId }: { customerId: string }) {
 
       if (result.status === "success") {
         formRef.current?.reset();
-        router.refresh();
+        setTimeout(() => window.location.reload(), 700);
+        return;
       }
     } catch (error) {
       console.error("Failed to create document rule", error);

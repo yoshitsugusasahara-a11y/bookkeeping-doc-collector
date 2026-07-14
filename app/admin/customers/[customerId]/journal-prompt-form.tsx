@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, Save } from "lucide-react";
 import {
   type JournalPromptState,
@@ -22,7 +21,6 @@ export function JournalPromptForm({
   customerId,
   journalPrompt,
 }: JournalPromptFormProps) {
-  const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [state, setState] = useState<JournalPromptState>(initialState);
 
@@ -41,7 +39,8 @@ export function JournalPromptForm({
       setState(result);
 
       if (result.status === "success") {
-        router.refresh();
+        setTimeout(() => window.location.reload(), 700);
+        return;
       }
     } catch (error) {
       console.error("Failed to save journal prompt", error);

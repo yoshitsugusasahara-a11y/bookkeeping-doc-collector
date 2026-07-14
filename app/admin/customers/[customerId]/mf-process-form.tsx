@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, PlayCircle, XCircle } from "lucide-react";
 import {
   listPendingMfSubmissions,
@@ -18,7 +17,6 @@ type ItemResult = {
 };
 
 export function MfProcessForm({ customerId }: { customerId: string }) {
-  const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
   const [items, setItems] = useState<ItemResult[]>([]);
   const [notice, setNotice] = useState<{
@@ -97,7 +95,8 @@ export function MfProcessForm({ customerId }: { customerId: string }) {
         status: failedCount > 0 ? "error" : "success",
         message: `完了しました。成功 ${successCount}件 / 失敗 ${failedCount}件`,
       });
-      router.refresh();
+      setTimeout(() => window.location.reload(), 700);
+      return;
     } catch (error) {
       console.error("MF batch processing failed", error);
       setNotice({

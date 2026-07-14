@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import {
   updateSubmissionOcr,
@@ -33,7 +32,6 @@ export function OcrEditForm({
   ocrPaymentMethod?: string | null;
   ocrIsCreditCard?: boolean | null;
 }) {
-  const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<{
     status: "success" | "error" | "locked";
@@ -62,7 +60,8 @@ export function OcrEditForm({
       }
 
       if (result.status === "success") {
-        router.refresh();
+        setTimeout(() => window.location.reload(), 700);
+        return;
       }
     } catch (error) {
       console.error("Failed to save OCR result", error);

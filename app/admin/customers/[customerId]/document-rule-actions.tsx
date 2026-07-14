@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
 import { deleteDocumentRuleById, toggleDocumentRuleActive } from "./actions";
 
@@ -14,7 +13,6 @@ export function DocumentRuleActions({
   ruleId: string;
   isActive: boolean;
 }) {
-  const router = useRouter();
   const [isToggling, setIsToggling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -23,10 +21,9 @@ export function DocumentRuleActions({
     setIsToggling(true);
     try {
       await toggleDocumentRuleActive(customerId, ruleId, isActive);
-      router.refresh();
+      window.location.reload();
     } catch (error) {
       console.error("Failed to toggle document rule", error);
-    } finally {
       setIsToggling(false);
     }
   }
@@ -38,10 +35,9 @@ export function DocumentRuleActions({
     setIsDeleting(true);
     try {
       await deleteDocumentRuleById(customerId, ruleId);
-      router.refresh();
+      window.location.reload();
     } catch (error) {
       console.error("Failed to delete document rule", error);
-    } finally {
       setIsDeleting(false);
     }
   }

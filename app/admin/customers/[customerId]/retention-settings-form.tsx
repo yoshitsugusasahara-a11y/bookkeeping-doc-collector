@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { CheckCircle2, DatabaseZap, Loader2 } from "lucide-react";
 import {
   type RetentionSettingsState,
@@ -22,7 +21,6 @@ export function RetentionSettingsForm({
   customerId,
   submissionRetentionLimit,
 }: RetentionSettingsFormProps) {
-  const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [state, setState] = useState<RetentionSettingsState>(initialState);
 
@@ -41,7 +39,8 @@ export function RetentionSettingsForm({
       setState(result);
 
       if (result.status === "success") {
-        router.refresh();
+        setTimeout(() => window.location.reload(), 700);
+        return;
       }
     } catch (error) {
       console.error("Failed to save retention settings", error);

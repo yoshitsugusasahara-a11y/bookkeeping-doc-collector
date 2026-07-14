@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { updateCustomerDriveSettings, type DriveSettingsState } from "./actions";
 
@@ -25,7 +24,6 @@ export function DriveSettingsForm({
   errorDriveFolderId,
   errorDriveFolderName,
 }: DriveSettingsFormProps) {
-  const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [state, setState] = useState<DriveSettingsState>(initialState);
 
@@ -44,7 +42,8 @@ export function DriveSettingsForm({
       setState(result);
 
       if (result.status === "success") {
-        router.refresh();
+        setTimeout(() => window.location.reload(), 700);
+        return;
       }
     } catch (error) {
       console.error("Failed to save Drive settings", error);
