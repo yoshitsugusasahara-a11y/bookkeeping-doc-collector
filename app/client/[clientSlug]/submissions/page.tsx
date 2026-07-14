@@ -9,8 +9,8 @@ import {
   ImageIcon,
   LogOut,
   Settings,
-  Trash2,
 } from "lucide-react";
+import { DeleteSubmissionButton } from "@/components/delete-submission-button";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -332,13 +332,7 @@ export default async function ClientSubmissionsPage({
                     action={hideSubmissionAsCustomer.bind(null, clientSlug)}
                   >
                     <input type="hidden" name="submissionId" value={item.id} />
-                    <button
-                      className="icon-button"
-                      type="submit"
-                      aria-label="この送信履歴を削除"
-                    >
-                      <Trash2 size={17} />
-                    </button>
+                    <DeleteSubmissionButton />
                   </form>
                 )}
               </div>

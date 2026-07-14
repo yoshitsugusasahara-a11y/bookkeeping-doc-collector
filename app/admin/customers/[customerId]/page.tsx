@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
+import { DeleteSubmissionButton } from "@/components/delete-submission-button";
 import {
   deleteDocumentRule,
   disconnectMoneyForward,
@@ -676,13 +677,7 @@ export default async function AdminCustomerDetailPage({
                   <form action={hideSubmission}>
                     <input type="hidden" name="customerId" value={customer.id} />
                     <input type="hidden" name="submissionId" value={item.id} />
-                    <button
-                      className="icon-button"
-                      type="submit"
-                      aria-label="この送信履歴を削除（非表示）"
-                    >
-                      <Trash2 size={17} />
-                    </button>
+                    <DeleteSubmissionButton />
                   </form>
                 )}
               </div>
