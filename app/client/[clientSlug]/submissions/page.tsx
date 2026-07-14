@@ -98,10 +98,11 @@ export default async function ClientSubmissionsPage({
   searchParams,
 }: {
   params: Promise<{ clientSlug: string }>;
-  searchParams: Promise<{ sent?: string; ocr?: string }>;
+  searchParams: Promise<{ sent?: string; ocr?: string; filter?: string }>;
 }) {
   const { clientSlug } = await params;
-  const { sent, ocr } = await searchParams;
+  const { sent, ocr, filter } = await searchParams;
+  const unsentOnly = filter === "unsent";
   const supabase = await createClient();
   const user = await getCurrentUserOrRedirect(
     supabase,
@@ -123,7 +124,7 @@ export default async function ClientSubmissionsPage({
     redirect(`/client/${clientSlug}/pending`);
   }
 
-  const { data: submissionRows } = await supabase
+  let submissionQuery = supabase
     .from("submissions")
     .select(
       "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
@@ -131,6 +132,12 @@ export default async function ClientSubmissionsPage({
     .eq("customer_account_id", account.id)
     .is("hidden_at", null)
     .order("submitted_at", { ascending: false });
+
+  if (unsentOnly) {
+    submissionQuery = submissionQuery.neq("mf_status", "sent");
+  }
+
+  const { data: submissionRows } = await submissionQuery;
   const submissions = submissionRows ?? [];
 
   const { data: documentRuleRows } = await supabase
@@ -170,6 +177,21 @@ export default async function ClientSubmissionsPage({
         </Link>
       </nav>
 
+      <div className="account-control-actions">
+        <a
+          className={unsentOnly ? "secondary-action" : "primary-action"}
+          href={`/client/${clientSlug}/submissions`}
+        >
+          すべて表示
+        </a>
+        <a
+          className={unsentOnly ? "primary-action" : "secondary-action"}
+          href={`/client/${clientSlug}/submissions?filter=unsent`}
+        >
+          未送信のみ表示
+        </a>
+      </div>
+
       {sent === "1" && (
         <section className="success-banner">
           <CheckCircle2 size={18} />
@@ -195,7 +217,11 @@ export default async function ClientSubmissionsPage({
 
       <section className="history-list" aria-label="送信済み資料">
         {submissions.length === 0 && (
-          <div className="empty-state">送信履歴はまだありません。</div>
+          <div className="empty-state">
+            {unsentOnly
+              ? "未送信の送信履歴はありません。"
+              : "送信履歴はまだありません。"}
+          </div>
         )}
         {submissions.map((item) => {
           const typeLabel = getFileTypeLabel(item.mime_type);
