@@ -62,7 +62,7 @@ export async function GET(request: Request) {
         const result = await processCustomerPendingSubmissions({
           supabase,
           customerId: customer.id,
-          limit: 20,
+          limit: 5,
           source: "cron",
         });
         results.push({
