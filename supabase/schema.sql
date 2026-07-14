@@ -221,6 +221,17 @@ grant select, insert, update on public.submissions to authenticated;
 grant select, insert, update, delete on public.mf_connections to authenticated;
 grant select, insert, update, delete on public.document_rules to authenticated;
 
+-- service_role bypasses RLS but still needs table-level grants at the
+-- Postgres level; without these, admin-client (cron, retention cleanup)
+-- queries fail with "permission denied" even though RLS would allow them.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on public.profiles to service_role;
+grant select, insert, update, delete on public.customer_accounts to service_role;
+grant select, insert, update, delete on public.admin_users to service_role;
+grant select, insert, update, delete on public.submissions to service_role;
+grant select, insert, update, delete on public.mf_connections to service_role;
+grant select, insert, update, delete on public.document_rules to service_role;
+
 insert into storage.buckets (id, name, public)
 values ('receipt_uploads', 'receipt_uploads', false)
 on conflict (id) do nothing;
@@ -460,6 +471,7 @@ create index if not exists activity_logs_created_at_idx
 alter table public.activity_logs enable row level security;
 
 grant select, insert on public.activity_logs to authenticated;
+grant select, insert, update, delete on public.activity_logs to service_role;
 
 drop policy if exists "activity_logs_select_admin" on public.activity_logs;
 create policy "activity_logs_select_admin"
