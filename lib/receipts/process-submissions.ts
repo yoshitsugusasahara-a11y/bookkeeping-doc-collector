@@ -586,6 +586,7 @@ export async function processCustomerPendingOcr({
     .eq("customer_account_id", customerId)
     .in("ocr_status", ["pending", "failed"])
     .not("source_storage_path", "is", null)
+    .is("hidden_at", null)
     .order("submitted_at", { ascending: true })
     .limit(limit);
 
@@ -777,6 +778,7 @@ export async function processCustomerPendingSubmissions({
     .eq("customer_account_id", customerId)
     .neq("mf_status", "sent")
     .not("source_storage_path", "is", null)
+    .is("hidden_at", null)
     .order("submitted_at", { ascending: true })
     .limit(limit);
 

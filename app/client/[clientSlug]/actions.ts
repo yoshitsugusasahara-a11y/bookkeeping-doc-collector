@@ -152,3 +152,23 @@ export async function sendSubmissionToMoneyForward(
   revalidatePath(`/client/${clientSlug}/submissions`);
   revalidatePath("/admin/customers");
 }
+
+export async function hideSubmissionAsCustomer(
+  clientSlug: string,
+  formData: FormData,
+) {
+  const submissionId = String(formData.get("submissionId") || "");
+  if (!submissionId) return;
+
+  const { supabase, account } = await getApprovedClientAccount(clientSlug);
+
+  await supabase
+    .from("submissions")
+    .update({ hidden_at: new Date().toISOString() })
+    .eq("id", submissionId)
+    .eq("customer_account_id", account.id)
+    .neq("mf_status", "sent");
+
+  revalidatePath(`/client/${clientSlug}/submissions`);
+  revalidatePath("/admin/customers");
+}

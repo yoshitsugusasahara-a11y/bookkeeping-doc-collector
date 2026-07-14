@@ -292,6 +292,7 @@ export async function listPendingMfSubmissions(
     .eq("customer_account_id", customerId)
     .neq("mf_status", "sent")
     .not("source_storage_path", "is", null)
+    .is("hidden_at", null)
     .order("submitted_at", { ascending: true })
     .limit(100);
 
@@ -335,4 +336,43 @@ export async function processSingleMfSubmission(
   } catch (error) {
     return { status: "error", message: getErrorMessage(error) };
   }
+}
+
+export async function hideSubmission(formData: FormData) {
+  const customerId = String(formData.get("customerId") || "");
+  const submissionId = String(formData.get("submissionId") || "");
+
+  if (!customerId || !submissionId) return;
+
+  const supabase = await ensureAdmin();
+  if (!supabase) return;
+
+  await supabase
+    .from("submissions")
+    .update({ hidden_at: new Date().toISOString() })
+    .eq("id", submissionId)
+    .eq("customer_account_id", customerId)
+    .neq("mf_status", "sent");
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath(`/admin/customers/${customerId}/trash`);
+}
+
+export async function restoreSubmission(formData: FormData) {
+  const customerId = String(formData.get("customerId") || "");
+  const submissionId = String(formData.get("submissionId") || "");
+
+  if (!customerId || !submissionId) return;
+
+  const supabase = await ensureAdmin();
+  if (!supabase) return;
+
+  await supabase
+    .from("submissions")
+    .update({ hidden_at: null })
+    .eq("id", submissionId)
+    .eq("customer_account_id", customerId);
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath(`/admin/customers/${customerId}/trash`);
 }

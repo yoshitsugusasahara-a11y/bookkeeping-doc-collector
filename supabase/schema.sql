@@ -100,6 +100,7 @@ create table if not exists public.submissions (
   mf_journal_id text,
   mf_voucher_file_id text,
   mf_sent_at timestamptz,
+  hidden_at timestamptz,
   submitted_at timestamptz not null default now()
 );
 
@@ -127,7 +128,8 @@ alter table public.submissions
   add column if not exists mf_error text,
   add column if not exists mf_journal_id text,
   add column if not exists mf_voucher_file_id text,
-  add column if not exists mf_sent_at timestamptz;
+  add column if not exists mf_sent_at timestamptz,
+  add column if not exists hidden_at timestamptz;
 
 alter table public.customer_accounts
   add column if not exists error_drive_folder_id text,
@@ -169,6 +171,9 @@ create index if not exists submissions_customer_account_id_idx
 
 create index if not exists submissions_submitted_at_idx
   on public.submissions(submitted_at desc);
+
+create index if not exists submissions_hidden_at_idx
+  on public.submissions(hidden_at);
 
 create index if not exists mf_connections_user_id_idx
   on public.mf_connections(user_id);

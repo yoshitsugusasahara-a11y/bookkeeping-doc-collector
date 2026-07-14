@@ -142,6 +142,7 @@ export type Database = {
           mf_journal_id: string | null;
           mf_voucher_file_id: string | null;
           mf_sent_at: string | null;
+          hidden_at: string | null;
           submitted_at: string;
         };
         Insert: {
@@ -179,6 +180,7 @@ export type Database = {
           mf_journal_id?: string | null;
           mf_voucher_file_id?: string | null;
           mf_sent_at?: string | null;
+          hidden_at?: string | null;
           submitted_at?: string;
         };
         Update: {
@@ -216,6 +218,7 @@ export type Database = {
           mf_journal_id?: string | null;
           mf_voucher_file_id?: string | null;
           mf_sent_at?: string | null;
+          hidden_at?: string | null;
           submitted_at?: string;
         };
         Relationships: [];

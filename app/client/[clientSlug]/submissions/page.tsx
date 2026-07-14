@@ -9,10 +9,12 @@ import {
   ImageIcon,
   LogOut,
   Settings,
+  Trash2,
 } from "lucide-react";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import {
+  hideSubmissionAsCustomer,
   logoutClient,
   sendSubmissionToMoneyForward,
 } from "../actions";
@@ -127,6 +129,7 @@ export default async function ClientSubmissionsPage({
       "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", account.id)
+    .is("hidden_at", null)
     .order("submitted_at", { ascending: false });
   const submissions = submissionRows ?? [];
 
@@ -323,6 +326,20 @@ export default async function ClientSubmissionsPage({
                 )}
                 {item.mf_error && (
                   <small className="warning-text">MF: {item.mf_error}</small>
+                )}
+                {!isSent && (
+                  <form
+                    action={hideSubmissionAsCustomer.bind(null, clientSlug)}
+                  >
+                    <input type="hidden" name="submissionId" value={item.id} />
+                    <button
+                      className="icon-button"
+                      type="submit"
+                      aria-label="この送信履歴を削除"
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </form>
                 )}
               </div>
             </article>

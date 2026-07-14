@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   deleteDocumentRule,
   disconnectMoneyForward,
+  hideSubmission,
   toggleDocumentRule,
 } from "./actions";
 import {
@@ -127,10 +128,14 @@ function formatAdminDateTime(value?: string | null) {
 
 export default async function AdminCustomerDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ customerId: string }>;
+  searchParams: Promise<{ filter?: string }>;
 }) {
   const { customerId } = await params;
+  const { filter } = await searchParams;
+  const unsentOnly = filter === "unsent";
   const supabase = await createClient();
   const user = await getCurrentUserOrRedirect(supabase, "/admin/login");
 
@@ -210,13 +215,20 @@ export default async function AdminCustomerDetailPage({
     .eq("id", customer.user_id)
     .maybeSingle();
 
-  const { data: submissionRows } = await supabase
+  let submissionQuery = supabase
     .from("submissions")
     .select(
       "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", customer.id)
+    .is("hidden_at", null)
     .order("submitted_at", { ascending: false });
+
+  if (unsentOnly) {
+    submissionQuery = submissionQuery.neq("mf_status", "sent");
+  }
+
+  const { data: submissionRows } = await submissionQuery;
   const submissions = submissionRows ?? [];
 
   const { data: mfConnection } = await supabase
@@ -508,8 +520,35 @@ export default async function AdminCustomerDetailPage({
           <MfProcessForm customerId={customer.id} />
         </section>
 
+        <section className="settings-panel" aria-label="送信履歴の絞り込み">
+          <div className="account-control-actions">
+            <Link
+              className={unsentOnly ? "secondary-action" : "primary-action"}
+              href={`/admin/customers/${customer.id}`}
+            >
+              すべて表示
+            </Link>
+            <Link
+              className={unsentOnly ? "primary-action" : "secondary-action"}
+              href={`/admin/customers/${customer.id}?filter=unsent`}
+            >
+              未送信のみ表示
+            </Link>
+            <Link
+              className="secondary-action"
+              href={`/admin/customers/${customer.id}/trash`}
+            >
+              ゴミ箱を見る
+            </Link>
+          </div>
+        </section>
+
         {submissions.length === 0 && (
-          <div className="empty-state">送信履歴はまだありません。</div>
+          <div className="empty-state">
+            {unsentOnly
+              ? "未送信の送信履歴はありません。"
+              : "送信履歴はまだありません。"}
+          </div>
         )}
         {submissions.map((item) => {
           const typeLabel = getFileTypeLabel(item.mime_type);
@@ -632,6 +671,19 @@ export default async function AdminCustomerDetailPage({
                 )}
                 {item.mf_error && (
                   <small className="warning-text">MF: {item.mf_error}</small>
+                )}
+                {item.mf_status !== "sent" && (
+                  <form action={hideSubmission}>
+                    <input type="hidden" name="customerId" value={customer.id} />
+                    <input type="hidden" name="submissionId" value={item.id} />
+                    <button
+                      className="icon-button"
+                      type="submit"
+                      aria-label="この送信履歴を削除（非表示）"
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </form>
                 )}
               </div>
             </article>
