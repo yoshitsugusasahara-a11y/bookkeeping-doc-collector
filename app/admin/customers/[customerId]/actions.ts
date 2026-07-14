@@ -88,7 +88,14 @@ export async function updateCustomerDriveSettings(
   return { status: "success", message: "Drive設定を保存しました。" };
 }
 
-export async function createDocumentRule(formData: FormData) {
+export type DocumentRuleState = {
+  status: "idle" | "success" | "error";
+  message: string;
+};
+
+export async function createDocumentRule(
+  formData: FormData,
+): Promise<DocumentRuleState> {
   const customerId = String(formData.get("customerId") || "");
   const documentName = String(formData.get("documentName") || "").trim();
   const matchFeatures = String(formData.get("matchFeatures") || "").trim();
@@ -97,13 +104,18 @@ export async function createDocumentRule(formData: FormData) {
   const driveFolderName = String(formData.get("driveFolderName") || "").trim();
 
   if (!customerId || !documentName || !fileNameRule) {
-    return;
+    return {
+      status: "error",
+      message: "資料名とファイル名ルールを入力してください。",
+    };
   }
 
   const supabase = await ensureAdmin();
-  if (!supabase) return;
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
 
-  await supabase.from("document_rules").insert({
+  const { error } = await supabase.from("document_rules").insert({
     customer_account_id: customerId,
     document_name: documentName,
     match_features: matchFeatures || null,
@@ -112,6 +124,48 @@ export async function createDocumentRule(formData: FormData) {
     drive_folder_name: driveFolderName || null,
     is_active: true,
   });
+
+  if (error) {
+    return {
+      status: "error",
+      message: `資料分類ルールを保存できませんでした。${getErrorMessage(error)}`,
+    };
+  }
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  return { status: "success", message: "資料分類ルールを追加しました。" };
+}
+
+export async function toggleDocumentRuleActive(
+  customerId: string,
+  ruleId: string,
+  isActive: boolean,
+) {
+  if (!customerId || !ruleId) return;
+
+  const supabase = await ensureAdmin();
+  if (!supabase) return;
+
+  await supabase
+    .from("document_rules")
+    .update({ is_active: !isActive })
+    .eq("id", ruleId)
+    .eq("customer_account_id", customerId);
+
+  revalidatePath(`/admin/customers/${customerId}`);
+}
+
+export async function deleteDocumentRuleById(customerId: string, ruleId: string) {
+  if (!customerId || !ruleId) return;
+
+  const supabase = await ensureAdmin();
+  if (!supabase) return;
+
+  await supabase
+    .from("document_rules")
+    .delete()
+    .eq("id", ruleId)
+    .eq("customer_account_id", customerId);
 
   revalidatePath(`/admin/customers/${customerId}`);
 }
@@ -209,42 +263,6 @@ export async function updateCustomerRetentionSettings(
   }
 }
 
-export async function toggleDocumentRule(formData: FormData) {
-  const customerId = String(formData.get("customerId") || "");
-  const ruleId = String(formData.get("ruleId") || "");
-  const isActive = String(formData.get("isActive") || "") === "true";
-
-  if (!customerId || !ruleId) return;
-
-  const supabase = await ensureAdmin();
-  if (!supabase) return;
-
-  await supabase
-    .from("document_rules")
-    .update({ is_active: !isActive })
-    .eq("id", ruleId)
-    .eq("customer_account_id", customerId);
-
-  revalidatePath(`/admin/customers/${customerId}`);
-}
-
-export async function deleteDocumentRule(formData: FormData) {
-  const customerId = String(formData.get("customerId") || "");
-  const ruleId = String(formData.get("ruleId") || "");
-
-  if (!customerId || !ruleId) return;
-
-  const supabase = await ensureAdmin();
-  if (!supabase) return;
-
-  await supabase
-    .from("document_rules")
-    .delete()
-    .eq("id", ruleId)
-    .eq("customer_account_id", customerId);
-
-  revalidatePath(`/admin/customers/${customerId}`);
-}
 
 export async function disconnectMoneyForward(formData: FormData) {
   const customerId = String(formData.get("customerId") || "");

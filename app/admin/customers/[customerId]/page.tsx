@@ -8,23 +8,18 @@ import {
   ImageIcon,
   Link2Off,
   ShieldCheck,
-  Trash2,
 } from "lucide-react";
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { DeleteSubmissionButton } from "@/components/delete-submission-button";
-import {
-  deleteDocumentRule,
-  disconnectMoneyForward,
-  hideSubmission,
-  toggleDocumentRule,
-} from "./actions";
+import { disconnectMoneyForward, hideSubmission } from "./actions";
 import {
   deleteCustomerAccount,
   resumeCustomerAccount,
   suspendCustomerAccount,
 } from "../actions";
 import { CustomerAccountActionButton } from "../customer-account-action-button";
+import { DocumentRuleActions } from "./document-rule-actions";
 import { DocumentRuleForm } from "./document-rule-form";
 import { DriveSettingsForm } from "./drive-settings-form";
 import { JournalPromptForm } from "./journal-prompt-form";
@@ -503,27 +498,11 @@ export default async function AdminCustomerDetailPage({
                     </small>
                   )}
                 </div>
-                <div className="rule-actions">
-                  <form action={toggleDocumentRule}>
-                    <input type="hidden" name="customerId" value={customer.id} />
-                    <input type="hidden" name="ruleId" value={rule.id} />
-                    <input
-                      type="hidden"
-                      name="isActive"
-                      value={String(rule.is_active)}
-                    />
-                    <button className="secondary-action compact-action" type="submit">
-                      {rule.is_active ? "無効化" : "有効化"}
-                    </button>
-                  </form>
-                  <form action={deleteDocumentRule}>
-                    <input type="hidden" name="customerId" value={customer.id} />
-                    <input type="hidden" name="ruleId" value={rule.id} />
-                    <button className="icon-button" type="submit" aria-label="削除">
-                      <Trash2 size={17} />
-                    </button>
-                  </form>
-                </div>
+                <DocumentRuleActions
+                  customerId={customer.id}
+                  ruleId={rule.id}
+                  isActive={rule.is_active}
+                />
               </article>
             ))
           )}
