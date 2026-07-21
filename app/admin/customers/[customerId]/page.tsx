@@ -124,12 +124,13 @@ export default async function AdminCustomerDetailPage({
   searchParams,
 }: {
   params: Promise<{ customerId: string }>;
-  searchParams: Promise<{ filter?: "unsent" | "mf_failed" }>;
+  searchParams: Promise<{ filter?: "unsent" | "mf_failed" | "sent" }>;
 }) {
   const { customerId } = await params;
   const { filter } = await searchParams;
   const unsentOnly = filter === "unsent";
   const mfFailedOnly = filter === "mf_failed";
+  const sentOnly = filter === "sent";
   const supabase = await createClient();
   const user = await getCurrentUserOrRedirect(supabase, "/admin/login");
 
@@ -220,6 +221,8 @@ export default async function AdminCustomerDetailPage({
 
   if (mfFailedOnly) {
     submissionQuery = submissionQuery.eq("mf_status", "failed");
+  } else if (sentOnly) {
+    submissionQuery = submissionQuery.eq("mf_status", "sent");
   } else if (unsentOnly) {
     submissionQuery = submissionQuery.neq("mf_status", "sent");
   }
@@ -231,6 +234,7 @@ export default async function AdminCustomerDetailPage({
     { count: allCount },
     { count: unsentCount },
     { count: mfFailedCount },
+    { count: sentCount },
     { count: trashCount },
   ] = await Promise.all([
     supabase
@@ -250,6 +254,12 @@ export default async function AdminCustomerDetailPage({
       .eq("customer_account_id", customer.id)
       .is("hidden_at", null)
       .eq("mf_status", "failed"),
+    supabase
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_account_id", customer.id)
+      .is("hidden_at", null)
+      .eq("mf_status", "sent"),
     supabase
       .from("submissions")
       .select("id", { count: "exact", head: true })
@@ -524,7 +534,9 @@ export default async function AdminCustomerDetailPage({
           <div className="account-control-actions">
             <a
               className={
-                !unsentOnly && !mfFailedOnly ? "primary-action" : "secondary-action"
+                !unsentOnly && !mfFailedOnly && !sentOnly
+                  ? "primary-action"
+                  : "secondary-action"
               }
               href={`/admin/customers/${customer.id}`}
             >
@@ -543,6 +555,12 @@ export default async function AdminCustomerDetailPage({
               MF送信エラーのみ表示（{mfFailedCount ?? 0}）
             </a>
             <a
+              className={sentOnly ? "primary-action" : "secondary-action"}
+              href={`/admin/customers/${customer.id}?filter=sent`}
+            >
+              送信済みのみ表示（{sentCount ?? 0}）
+            </a>
+            <a
               className="secondary-action"
               href={`/admin/customers/${customer.id}/trash`}
             >
@@ -555,9 +573,11 @@ export default async function AdminCustomerDetailPage({
           <div className="empty-state">
             {mfFailedOnly
               ? "MF送信エラーの送信履歴はありません。"
-              : unsentOnly
-                ? "未送信の送信履歴はありません。"
-                : "送信履歴はまだありません。"}
+              : sentOnly
+                ? "送信済みの送信履歴はありません。"
+                : unsentOnly
+                  ? "未送信の送信履歴はありません。"
+                  : "送信履歴はまだありません。"}
           </div>
         )}
         {submissions.map((item) => {
