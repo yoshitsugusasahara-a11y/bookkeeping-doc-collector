@@ -51,6 +51,8 @@ create table if not exists public.customer_accounts (
   drive_folder_name text,
   error_drive_folder_id text,
   error_drive_folder_name text,
+  irregular_drive_folder_id text,
+  irregular_drive_folder_name text,
   journal_prompt text,
   submission_retention_limit integer not null default 200,
   approved_at timestamptz,
@@ -134,6 +136,8 @@ alter table public.submissions
 alter table public.customer_accounts
   add column if not exists error_drive_folder_id text,
   add column if not exists error_drive_folder_name text,
+  add column if not exists irregular_drive_folder_id text,
+  add column if not exists irregular_drive_folder_name text,
   add column if not exists journal_prompt text,
   add column if not exists submission_retention_limit integer not null default 200;
 

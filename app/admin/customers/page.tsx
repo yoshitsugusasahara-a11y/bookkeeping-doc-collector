@@ -20,6 +20,8 @@ type CustomerRow = {
   approval_status: "pending" | "approved" | "rejected" | "suspended";
   drive_folder_id: string | null;
   drive_folder_name: string | null;
+  error_drive_folder_id: string | null;
+  irregular_drive_folder_id: string | null;
   created_at: string;
 };
 
@@ -91,7 +93,7 @@ export default async function AdminCustomersPage() {
   const { data: customerRows } = await supabase
     .from("customer_accounts")
     .select(
-      "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, created_at",
+      "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, irregular_drive_folder_id, created_at",
     )
     .order("created_at", { ascending: false })
     .returns<CustomerRow[]>();
@@ -147,7 +149,10 @@ export default async function AdminCustomersPage() {
     (customer) => customer.approval_status === "suspended",
   ).length;
   const driveMissingCount = customers.filter(
-    (customer) => !customer.drive_folder_id,
+    (customer) =>
+      !customer.drive_folder_id ||
+      !customer.error_drive_folder_id ||
+      !customer.irregular_drive_folder_id,
   ).length;
   const mfMissingCount = customers.filter(
     (customer) => !mfConnectionByAccountId.has(customer.id),
@@ -219,8 +224,9 @@ export default async function AdminCustomersPage() {
           <section className="warning-banner">
             <AlertTriangle size={18} />
             <span>
-              Drive未設定の顧客が{driveMissingCount}
-              件あります。顧客詳細から保存先フォルダを設定してください。
+              Driveの保存先フォルダ（レシート／エラー／ルールが存在しない資料）が未設定の顧客が
+              {driveMissingCount}
+              件あります。3つすべて設定するまで、顧客側でアップロードできません。
             </span>
           </section>
         )}

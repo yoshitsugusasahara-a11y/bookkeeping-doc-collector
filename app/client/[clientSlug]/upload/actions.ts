@@ -100,7 +100,9 @@ export async function createSubmission(
 
   const { data: account } = await supabase
     .from("customer_accounts")
-    .select("id, approval_status, submission_retention_limit")
+    .select(
+      "id, approval_status, submission_retention_limit, drive_folder_id, error_drive_folder_id, irregular_drive_folder_id",
+    )
     .eq("user_id", user.id)
     .eq("client_slug", clientSlug)
     .maybeSingle();
@@ -111,6 +113,18 @@ export async function createSubmission(
 
   if (account.approval_status !== "approved") {
     redirect(`/client/${clientSlug}/pending`);
+  }
+
+  if (
+    !account.drive_folder_id ||
+    !account.error_drive_folder_id ||
+    !account.irregular_drive_folder_id
+  ) {
+    return {
+      status: "error",
+      message:
+        "資料の保存先が設定されていないため、アップロードできません。管理者にご連絡ください。",
+    };
   }
 
   const sourceStoragePath = `${account.id}/${crypto.randomUUID()}-${sanitizeFileName(

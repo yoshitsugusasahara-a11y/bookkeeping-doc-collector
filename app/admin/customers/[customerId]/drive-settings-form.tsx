@@ -10,6 +10,8 @@ type DriveSettingsFormProps = {
   driveFolderName: string | null;
   errorDriveFolderId: string | null;
   errorDriveFolderName: string | null;
+  irregularDriveFolderId: string | null;
+  irregularDriveFolderName: string | null;
 };
 
 const initialState: DriveSettingsState = {
@@ -23,6 +25,8 @@ export function DriveSettingsForm({
   driveFolderName,
   errorDriveFolderId,
   errorDriveFolderName,
+  irregularDriveFolderId,
+  irregularDriveFolderName,
 }: DriveSettingsFormProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [state, setState] = useState<DriveSettingsState>(initialState);
@@ -78,20 +82,38 @@ export function DriveSettingsForm({
         />
       </label>
       <label className="field">
-        <span>エラー用フォルダID</span>
+        <span>エラーフォルダID（MF送信失敗時の退避専用）</span>
         <input
           name="errorDriveFolderId"
           defaultValue={errorDriveFolderId || ""}
-          placeholder="例: エラー証憑用のGoogle DriveフォルダID"
+          placeholder="例: MF送信エラー退避用のGoogle DriveフォルダID"
           disabled={isSaving}
         />
       </label>
       <label className="field">
-        <span>エラー用表示名</span>
+        <span>エラーフォルダ表示名</span>
         <input
           name="errorDriveFolderName"
           defaultValue={errorDriveFolderName || ""}
-          placeholder="例: 東京商会 エラー証憑フォルダ"
+          placeholder="例: 東京商会 MF送信エラーフォルダ"
+          disabled={isSaving}
+        />
+      </label>
+      <label className="field">
+        <span>ルールが存在しない資料フォルダID</span>
+        <input
+          name="irregularDriveFolderId"
+          defaultValue={irregularDriveFolderId || ""}
+          placeholder="例: ルールが存在しない資料用のGoogle DriveフォルダID"
+          disabled={isSaving}
+        />
+      </label>
+      <label className="field">
+        <span>ルールが存在しない資料フォルダ表示名</span>
+        <input
+          name="irregularDriveFolderName"
+          defaultValue={irregularDriveFolderName || ""}
+          placeholder="例: 東京商会 ルールが存在しない資料フォルダ"
           disabled={isSaving}
         />
       </label>

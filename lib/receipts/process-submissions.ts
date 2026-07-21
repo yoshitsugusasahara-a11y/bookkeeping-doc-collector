@@ -58,6 +58,7 @@ type CustomerDriveSettings = {
   id: string;
   drive_folder_id: string | null;
   error_drive_folder_id: string | null;
+  irregular_drive_folder_id: string | null;
   journal_prompt: string | null;
 };
 
@@ -190,7 +191,9 @@ async function getCustomerDriveSettings({
 }) {
   const { data: customer, error } = await supabase
     .from("customer_accounts")
-    .select("id, drive_folder_id, error_drive_folder_id, journal_prompt")
+    .select(
+      "id, drive_folder_id, error_drive_folder_id, irregular_drive_folder_id, journal_prompt",
+    )
     .eq("id", customerId)
     .maybeSingle();
 
@@ -438,8 +441,6 @@ async function classifyAndFileNonReceiptIfNeeded({
     customerId: submission.customer_account_id,
   });
 
-  if (rules.length === 0) return false;
-
   const outcome = await classifyDocumentWithGemini({
     file,
     mimeType: submission.mime_type,
@@ -507,7 +508,7 @@ async function classifyAndFileNonReceiptIfNeeded({
 
   const folderId = isMatchedDocument
     ? matchedRule.drive_folder_id || customer.drive_folder_id
-    : customer.error_drive_folder_id || customer.drive_folder_id;
+    : customer.irregular_drive_folder_id || customer.drive_folder_id;
 
   if (!folderId || !isGoogleDriveConfigured()) {
     await supabase

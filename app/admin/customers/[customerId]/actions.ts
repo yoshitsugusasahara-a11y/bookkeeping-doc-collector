@@ -56,6 +56,12 @@ export async function updateCustomerDriveSettings(
   const errorDriveFolderName = String(
     formData.get("errorDriveFolderName") || "",
   ).trim();
+  const irregularDriveFolderId = String(
+    formData.get("irregularDriveFolderId") || "",
+  ).trim();
+  const irregularDriveFolderName = String(
+    formData.get("irregularDriveFolderName") || "",
+  ).trim();
 
   if (!customerId) {
     return { status: "error", message: "顧客情報を取得できませんでした。" };
@@ -73,6 +79,8 @@ export async function updateCustomerDriveSettings(
       drive_folder_name: driveFolderName || null,
       error_drive_folder_id: errorDriveFolderId || null,
       error_drive_folder_name: errorDriveFolderName || null,
+      irregular_drive_folder_id: irregularDriveFolderId || null,
+      irregular_drive_folder_name: irregularDriveFolderName || null,
     })
     .eq("id", customerId);
 

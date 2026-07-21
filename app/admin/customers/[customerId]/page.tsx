@@ -167,7 +167,7 @@ export default async function AdminCustomerDetailPage({
   const { data: customer, error: customerError } = await supabase
     .from("customer_accounts")
     .select(
-      "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, journal_prompt, submission_retention_limit, created_at",
+      "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, irregular_drive_folder_id, irregular_drive_folder_name, journal_prompt, submission_retention_limit, created_at",
     )
     .eq("id", customerId)
     .maybeSingle();
@@ -373,11 +373,15 @@ export default async function AdminCustomerDetailPage({
         </div>
       </section>
 
-      {!customer.drive_folder_id && (
+      {!(
+        customer.drive_folder_id &&
+        customer.error_drive_folder_id &&
+        customer.irregular_drive_folder_id
+      ) && (
         <section className="warning-banner">
           <AlertTriangle size={18} />
           <span>
-            この顧客はDrive保存先が未設定です。設定するまで、送信履歴は保存されますがファイル本体はDriveに保存されません。
+            この顧客は「レシート保存フォルダ」「エラーフォルダ」「ルールが存在しない資料フォルダ」のいずれかが未設定です。3つすべて設定するまで、顧客側で資料をアップロードできません。
           </span>
         </section>
       )}
@@ -421,7 +425,7 @@ export default async function AdminCustomerDetailPage({
           <p className="eyebrow">Google Drive</p>
           <h2>保存先フォルダ</h2>
           <p className="muted">
-            顧客の送信ファイルを保存するGoogle DriveフォルダIDを登録します。
+            レシート保存フォルダ・エラーフォルダ・ルールが存在しない資料フォルダの3つすべてを設定するまで、顧客側で資料をアップロードできません。
           </p>
         </div>
         <DriveSettingsForm
@@ -430,6 +434,8 @@ export default async function AdminCustomerDetailPage({
           driveFolderName={customer.drive_folder_name}
           errorDriveFolderId={customer.error_drive_folder_id}
           errorDriveFolderName={customer.error_drive_folder_name}
+          irregularDriveFolderId={customer.irregular_drive_folder_id}
+          irregularDriveFolderName={customer.irregular_drive_folder_name}
         />
       </section>
 
