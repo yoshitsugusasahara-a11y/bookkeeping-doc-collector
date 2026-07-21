@@ -172,6 +172,9 @@ export default async function AdminCustomersPage() {
         <Link className="secondary-action sidebar-action" href="/admin/logs">
           実行ログ
         </Link>
+        <Link className="secondary-action sidebar-action" href="/admin/settings">
+          Driveトークン管理
+        </Link>
         <form action={logoutAdmin}>
           <button className="secondary-action sidebar-action" type="submit">
             ログアウト

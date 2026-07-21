@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { google } from "googleapis";
+import { recordGoogleDriveTokenIssued } from "@/lib/google/token-status";
 
 function htmlPage(content: string) {
   return new NextResponse(
@@ -92,6 +93,8 @@ export async function GET(request: NextRequest) {
       <code>http://localhost:3000/api/google-drive/start</code>
     `);
   }
+
+  await recordGoogleDriveTokenIssued();
 
   return htmlPage(`
     <h1>Google Drive連携トークンを取得しました</h1>

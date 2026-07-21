@@ -334,6 +334,24 @@ export type Database = {
         };
         Relationships: [];
       };
+      google_drive_token_status: {
+        Row: {
+          id: boolean;
+          issued_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: boolean;
+          issued_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: boolean;
+          issued_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

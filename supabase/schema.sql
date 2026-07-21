@@ -497,3 +497,38 @@ with check (
       and ca.user_id = auth.uid()
   )
 );
+
+-- Singleton row tracking when the Google Drive refresh token was last
+-- issued, so the admin screen can show its expected expiry (Google's OAuth
+-- app is in "Testing" publish status, which expires refresh tokens after
+-- 7 days).
+create table if not exists public.google_drive_token_status (
+  id boolean primary key default true,
+  issued_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint google_drive_token_status_singleton check (id)
+);
+
+alter table public.google_drive_token_status enable row level security;
+
+grant select, insert, update on public.google_drive_token_status to authenticated;
+grant select, insert, update, delete on public.google_drive_token_status to service_role;
+
+drop policy if exists "google_drive_token_status_select_admin" on public.google_drive_token_status;
+create policy "google_drive_token_status_select_admin"
+on public.google_drive_token_status for select
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "google_drive_token_status_insert_admin" on public.google_drive_token_status;
+create policy "google_drive_token_status_insert_admin"
+on public.google_drive_token_status for insert
+to authenticated
+with check (public.is_admin());
+
+drop policy if exists "google_drive_token_status_update_admin" on public.google_drive_token_status;
+create policy "google_drive_token_status_update_admin"
+on public.google_drive_token_status for update
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
