@@ -18,6 +18,10 @@ import {
   type ActivitySource,
 } from "@/lib/logging/activity-log";
 import { submitReceiptToMoneyForward } from "@/lib/moneyforward/auto-submit";
+import {
+  buildVoucherFileName,
+  getExtensionFromMimeType,
+} from "@/lib/moneyforward/client";
 import type { Database } from "@/lib/supabase/types";
 
 const receiptUploadBucket = "receipt_uploads";
@@ -329,19 +333,32 @@ async function uploadToDriveIfNeeded({
   submission,
   customer,
   file,
+  ocr,
 }: {
   supabase: SupabaseClient<Database>;
   submission: SubmissionRow;
   customer: CustomerDriveSettings;
   file: File;
+  ocr: ReceiptOcrResult;
 }) {
   if (submission.drive_file_id) return submission.drive_file_id;
   if (!customer.drive_folder_id || !isGoogleDriveConfigured()) return null;
 
+  const extension = getExtensionFromMimeType(
+    submission.mime_type,
+    submission.file_name || "receipt",
+  );
+  const driveFileName = buildVoucherFileName({
+    date: ocr.date,
+    amount: ocr.amount,
+    isCreditCard: ocr.is_credit_card,
+    extension,
+  });
+
   const uploadedFile = await uploadFileToDrive({
     file,
     folderId: customer.drive_folder_id,
-    fileName: submission.file_name || "uploaded-file",
+    fileName: driveFileName,
   });
 
   await supabase
@@ -662,6 +679,7 @@ export async function processSubmissionToMoneyForward({
       submission,
       customer,
       file,
+      ocr,
     });
 
     await submitReceiptToMoneyForward({
