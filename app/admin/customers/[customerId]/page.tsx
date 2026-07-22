@@ -15,6 +15,7 @@ import { hideSubmission } from "./actions";
 import { deleteCustomerAccount } from "../actions";
 import { CustomerAccountActionButton } from "../customer-account-action-button";
 import { CustomerAccountToggleButton } from "../customer-account-toggle-button";
+import { AdminOcrEditForm } from "./admin-ocr-edit-form";
 import { DisconnectMfButton } from "./disconnect-mf-button";
 import { DocumentRuleActions } from "./document-rule-actions";
 import { DocumentRuleForm } from "./document-rule-form";
@@ -66,26 +67,11 @@ function getOcrStatusLabel(status?: string | null) {
   return "OCR待ち";
 }
 
-function formatAmount(value?: number | null) {
-  if (typeof value !== "number") return "未取得";
-  return new Intl.NumberFormat("ja-JP", {
-    style: "currency",
-    currency: "JPY",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
 function getMfStatusLabel(status?: string | null) {
   if (status === "sent") return "MF送信済み";
   if (status === "failed") return "MF送信失敗";
   if (status === "not_ready") return "MF未送信";
   return "MF送信待ち";
-}
-
-function getPaymentMethodLabel(method?: string | null, isCreditCard?: boolean | null) {
-  if (method === "credit_card" || isCreditCard === true) return "クレジット払い";
-  if (method === "cashless") return "キャッシュレス等";
-  return "現金";
 }
 
 function getDocumentClassificationStatusLabel(
@@ -213,7 +199,7 @@ export default async function AdminCustomerDetailPage({
   let submissionQuery = supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_updated_at, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", customer.id)
     .is("hidden_at", null)
@@ -660,31 +646,6 @@ export default async function AdminCustomerDetailPage({
                     <dd>{getOcrStatusLabel(item.ocr_status)}</dd>
                   </div>
                   <div>
-                    <dt>取引日</dt>
-                    <dd>{item.ocr_date || "未取得"}</dd>
-                  </div>
-                  <div>
-                    <dt>金額</dt>
-                    <dd>{formatAmount(item.ocr_amount)}</dd>
-                  </div>
-                  <div>
-                    <dt>店舗名</dt>
-                    <dd>{item.ocr_store || "未取得"}</dd>
-                  </div>
-                  <div>
-                    <dt>概要</dt>
-                    <dd>{item.ocr_summary || "未取得"}</dd>
-                  </div>
-                  <div>
-                    <dt>支払方法</dt>
-                    <dd>
-                      {getPaymentMethodLabel(
-                        item.ocr_payment_method,
-                        item.ocr_is_credit_card,
-                      )}
-                    </dd>
-                  </div>
-                  <div>
                     <dt>MF送信</dt>
                     <dd>{getMfStatusLabel(item.mf_status)}</dd>
                   </div>
@@ -697,6 +658,18 @@ export default async function AdminCustomerDetailPage({
                     </dd>
                   </div>
                 </dl>
+                <AdminOcrEditForm
+                  customerId={customer.id}
+                  submissionId={item.id}
+                  isSent={item.mf_status === "sent"}
+                  ocrDate={item.ocr_date}
+                  ocrAmount={item.ocr_amount}
+                  ocrStore={item.ocr_store}
+                  ocrSummary={item.ocr_summary}
+                  ocrPaymentMethod={item.ocr_payment_method}
+                  ocrIsCreditCard={item.ocr_is_credit_card}
+                  ocrUpdatedAt={item.ocr_updated_at}
+                />
                 {item.ocr_error && (
                   <small className="warning-text">OCR: {item.ocr_error}</small>
                 )}

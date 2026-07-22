@@ -21,6 +21,7 @@ export function OcrEditForm({
   ocrSummary,
   ocrPaymentMethod,
   ocrIsCreditCard,
+  ocrUpdatedAt,
 }: {
   clientSlug: string;
   submissionId: string;
@@ -31,10 +32,11 @@ export function OcrEditForm({
   ocrSummary?: string | null;
   ocrPaymentMethod?: string | null;
   ocrIsCreditCard?: boolean | null;
+  ocrUpdatedAt?: string | null;
 }) {
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<{
-    status: "success" | "error" | "locked";
+    status: "success" | "error" | "locked" | "conflict";
     message: string;
   } | null>(null);
 
@@ -63,6 +65,11 @@ export function OcrEditForm({
         setTimeout(() => window.location.reload(), 700);
         return;
       }
+
+      if (result.status === "conflict") {
+        setTimeout(() => window.location.reload(), 1500);
+        return;
+      }
     } catch (error) {
       console.error("Failed to save OCR result", error);
       setNotice({
@@ -84,6 +91,11 @@ export function OcrEditForm({
       onSubmit={handleSubmit}
     >
       <input type="hidden" name="submissionId" value={submissionId} />
+      <input
+        type="hidden"
+        name="ocrUpdatedAt"
+        value={ocrUpdatedAt || ""}
+      />
       <label className="field">
         <span>取引日</span>
         <input
@@ -152,7 +164,9 @@ export function OcrEditForm({
       {notice?.status === "success" && (
         <small className="success-text">{notice.message}</small>
       )}
-      {(notice?.status === "error" || notice?.status === "locked") && (
+      {(notice?.status === "error" ||
+        notice?.status === "locked" ||
+        notice?.status === "conflict") && (
         <small className="warning-text">{notice.message}</small>
       )}
     </form>

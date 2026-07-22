@@ -13,6 +13,11 @@ export type DriveSettingsState = {
   message: string;
 };
 
+export type OcrUpdateState = {
+  status: "idle" | "success" | "error" | "locked" | "conflict";
+  message: string;
+};
+
 export type JournalPromptState = {
   status: "idle" | "success" | "error";
   message: string;
@@ -396,4 +401,93 @@ export async function restoreSubmission(
 
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath(`/admin/customers/${customerId}/trash`);
+}
+
+function parseOcrAmount(value: string) {
+  const text = value.replace(/[^\d-]/g, "");
+  if (!text) return null;
+  const parsed = Number.parseInt(text, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseOcrPaymentMethod(value: string) {
+  if (value === "credit_card") return "credit_card";
+  if (value === "cashless") return "cashless";
+  return "cash";
+}
+
+export async function updateSubmissionOcrAsAdmin(
+  customerId: string,
+  submissionId: string,
+  values: {
+    ocrDate: string;
+    ocrAmount: string;
+    ocrStore: string;
+    ocrSummary: string;
+    ocrPaymentMethod: string;
+    ocrUpdatedAt: string | null;
+  },
+): Promise<OcrUpdateState> {
+  if (!customerId || !submissionId) {
+    return { status: "error", message: "保存対象の資料を確認できませんでした。" };
+  }
+
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  const { data: submission } = await supabase
+    .from("submissions")
+    .select("id, mf_status, ocr_updated_at")
+    .eq("id", submissionId)
+    .eq("customer_account_id", customerId)
+    .maybeSingle();
+
+  if (!submission || submission.mf_status === "sent") {
+    revalidatePath(`/admin/customers/${customerId}`);
+    return {
+      status: "locked",
+      message: "MF送信済みのため、OCR結果は変更できません。",
+    };
+  }
+
+  if ((submission.ocr_updated_at || null) !== (values.ocrUpdatedAt || null)) {
+    revalidatePath(`/admin/customers/${customerId}`);
+    return {
+      status: "conflict",
+      message:
+        "編集中に他の変更がありました。最新の内容を確認してから再度編集してください。",
+    };
+  }
+
+  const ocrPaymentMethod = parseOcrPaymentMethod(values.ocrPaymentMethod);
+  const { error } = await supabase
+    .from("submissions")
+    .update({
+      ocr_status: "completed",
+      ocr_error: null,
+      ocr_date: values.ocrDate.trim() || null,
+      ocr_amount: parseOcrAmount(values.ocrAmount),
+      ocr_store: values.ocrStore.trim() || null,
+      ocr_summary: values.ocrSummary.trim() || null,
+      ocr_payment_method: ocrPaymentMethod,
+      ocr_is_credit_card: ocrPaymentMethod === "credit_card",
+      ocr_updated_at: new Date().toISOString(),
+      mf_status: "not_sent",
+      mf_error: null,
+    })
+    .eq("id", submissionId)
+    .eq("customer_account_id", customerId);
+
+  if (error) {
+    console.error("Failed to update OCR result as admin", error);
+    return {
+      status: "error",
+      message: "OCR結果の保存に失敗しました。時間をおいて再度お試しください。",
+    };
+  }
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  return { status: "success", message: "OCR結果を保存しました。" };
 }

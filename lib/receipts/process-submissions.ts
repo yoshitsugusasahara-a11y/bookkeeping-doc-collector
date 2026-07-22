@@ -430,6 +430,7 @@ async function runOcrForSubmission({
       ocr_summary: ocr.result.summary,
       ocr_payment_method: ocr.result.payment_method,
       ocr_is_credit_card: ocr.result.is_credit_card,
+      ocr_updated_at: new Date().toISOString(),
     })
     .eq("id", submission.id);
 

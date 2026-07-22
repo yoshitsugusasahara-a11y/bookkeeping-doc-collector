@@ -127,7 +127,7 @@ export default async function ClientSubmissionsPage({
   let submissionQuery = supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_updated_at, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", account.id)
     .is("hidden_at", null)
@@ -318,6 +318,7 @@ export default async function ClientSubmissionsPage({
                     ocrSummary={item.ocr_summary}
                     ocrPaymentMethod={item.ocr_payment_method}
                     ocrIsCreditCard={item.ocr_is_credit_card}
+                    ocrUpdatedAt={item.ocr_updated_at}
                   />
 
                   <dl className="ocr-summary compact-summary">

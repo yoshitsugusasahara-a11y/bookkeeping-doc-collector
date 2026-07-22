@@ -7,7 +7,7 @@ import { processSubmissionToMoneyForward } from "@/lib/receipts/process-submissi
 import { createClient } from "@/lib/supabase/server";
 
 export type OcrUpdateState = {
-  status: "idle" | "success" | "error" | "locked";
+  status: "idle" | "success" | "error" | "locked" | "conflict";
   message?: string;
   updatedAt?: number;
 };
@@ -67,6 +67,8 @@ export async function updateSubmissionOcr(
   const ocrStore = String(formData.get("ocrStore") || "").trim() || null;
   const ocrSummary = String(formData.get("ocrSummary") || "").trim() || null;
   const ocrPaymentMethod = parsePaymentMethod(formData.get("ocrPaymentMethod"));
+  const ocrUpdatedAtBefore =
+    String(formData.get("ocrUpdatedAt") || "").trim() || null;
 
   if (!submissionId) {
     return {
@@ -80,7 +82,7 @@ export async function updateSubmissionOcr(
 
   const { data: submission } = await supabase
     .from("submissions")
-    .select("id, mf_status")
+    .select("id, mf_status, ocr_updated_at")
     .eq("id", submissionId)
     .eq("customer_account_id", account.id)
     .maybeSingle();
@@ -94,6 +96,17 @@ export async function updateSubmissionOcr(
     };
   }
 
+  if ((submission.ocr_updated_at || null) !== ocrUpdatedAtBefore) {
+    revalidatePath(`/client/${clientSlug}/submissions`);
+    return {
+      status: "conflict",
+      message:
+        "編集中に他の変更がありました。最新の内容を確認してから再度編集してください。",
+      updatedAt: Date.now(),
+    };
+  }
+
+  const ocrUpdatedAtNow = new Date().toISOString();
   const { error } = await supabase
     .from("submissions")
     .update({
@@ -105,6 +118,7 @@ export async function updateSubmissionOcr(
       ocr_summary: ocrSummary,
       ocr_payment_method: ocrPaymentMethod,
       ocr_is_credit_card: ocrPaymentMethod === "credit_card",
+      ocr_updated_at: ocrUpdatedAtNow,
       mf_status: "not_sent",
       mf_error: null,
     })
