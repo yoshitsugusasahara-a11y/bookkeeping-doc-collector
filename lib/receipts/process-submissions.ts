@@ -10,6 +10,7 @@ import {
 import {
   isGoogleDriveConfigured,
   moveDriveFile,
+  renameDriveFile,
   uploadFileToDrive,
 } from "@/lib/google/drive";
 import {
@@ -331,6 +332,25 @@ async function moveToPrimaryFolderIfPossible({
     .eq("id", submissionId);
 }
 
+function buildReceiptDriveFileName({
+  submission,
+  ocr,
+}: {
+  submission: SubmissionRow;
+  ocr: ReceiptOcrResult;
+}) {
+  const extension = getExtensionFromMimeType(
+    submission.mime_type,
+    submission.file_name || "receipt",
+  );
+  return buildVoucherFileName({
+    date: ocr.date,
+    amount: ocr.amount,
+    isCreditCard: ocr.is_credit_card,
+    extension,
+  });
+}
+
 async function uploadToDriveIfNeeded({
   supabase,
   submission,
@@ -347,16 +367,7 @@ async function uploadToDriveIfNeeded({
   if (submission.drive_file_id) return submission.drive_file_id;
   if (!customer.drive_folder_id || !isGoogleDriveConfigured()) return null;
 
-  const extension = getExtensionFromMimeType(
-    submission.mime_type,
-    submission.file_name || "receipt",
-  );
-  const driveFileName = buildVoucherFileName({
-    date: ocr.date,
-    amount: ocr.amount,
-    isCreditCard: ocr.is_credit_card,
-    extension,
-  });
+  const driveFileName = buildReceiptDriveFileName({ submission, ocr });
 
   const uploadedFile = await uploadFileToDrive({
     file,
@@ -674,6 +685,7 @@ export async function processSubmissionToMoneyForward({
   try {
     const file = await downloadStoredFile({ supabase, submission });
     const ocr = await runOcrForSubmission({ supabase, submission, file });
+    const hadExistingDriveFile = Boolean(submission.drive_file_id);
 
     driveFileId = await uploadToDriveIfNeeded({
       supabase,
@@ -694,6 +706,38 @@ export async function processSubmissionToMoneyForward({
       ocr,
       customerJournalPrompt: customer.journal_prompt,
     });
+
+    // ドライブへのアップロードは一度成功すると再アップロードされないため、
+    // 前回の失敗時にアップロード済みだったファイルは、今回の送信で
+    // 使われた読み取り結果（証憑ファイル名と同じ内容）に合わせてリネームする。
+    if (driveFileId && hadExistingDriveFile) {
+      try {
+        const driveFileName = buildReceiptDriveFileName({ submission, ocr });
+        const renamedFile = await renameDriveFile({
+          fileId: driveFileId,
+          fileName: driveFileName,
+        });
+        driveFileId = renamedFile.fileId;
+        await supabase
+          .from("submissions")
+          .update({
+            drive_file_id: renamedFile.fileId,
+            drive_view_url: renamedFile.viewUrl,
+          })
+          .eq("id", submission.id);
+      } catch (renameError) {
+        console.error("Failed to rename Drive file after retrying MF send", renameError);
+        await logActivity({
+          supabase,
+          eventType: "drive_move",
+          status: "error",
+          message: `${submission.file_name} のドライブ上のファイル名更新に失敗しました。${getErrorMessageForLog(renameError)}`,
+          customerAccountId: customerId,
+          submissionId: submission.id,
+          source,
+        });
+      }
+    }
 
     try {
       await moveToPrimaryFolderIfPossible({

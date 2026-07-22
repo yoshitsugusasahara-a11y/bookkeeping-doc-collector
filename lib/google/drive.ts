@@ -101,3 +101,29 @@ export async function moveDriveFile({
       `https://drive.google.com/file/d/${response.data.id}/view`,
   };
 }
+
+export async function renameDriveFile({
+  fileId,
+  fileName,
+}: {
+  fileId: string;
+  fileName: string;
+}): Promise<DriveUploadResult> {
+  const drive = createDriveClient();
+  const response = await drive.files.update({
+    fileId,
+    requestBody: { name: fileName },
+    fields: "id, webViewLink",
+  });
+
+  if (!response.data.id) {
+    throw new Error("Google Driveファイルのリネームに失敗しました。");
+  }
+
+  return {
+    fileId: response.data.id,
+    viewUrl:
+      response.data.webViewLink ||
+      `https://drive.google.com/file/d/${response.data.id}/view`,
+  };
+}
