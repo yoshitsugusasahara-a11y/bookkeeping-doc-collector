@@ -120,6 +120,7 @@ function buildPrompt({
     "For Japanese documents, use both the document title and issuer text. Examples: NTTファイナンス口座振替のご案内 should match a rule whose features include NTTファイナンス; リースサンキュー請求書 should match a rule whose features include リースサンキュー and 請求書.",
     "If no rule is clear, return kind = unmatched_document.",
     "Use confidence from 0 to 1. Use document_date in YYYY-MM-DD format when visible, otherwise null.",
+    "Write the reason field in Japanese, as a short explanation. Both the admin and the customer will read it.",
     "",
     `User note: ${transactionNote}`,
     `Document rules: ${JSON.stringify(
@@ -131,7 +132,7 @@ function buildPrompt({
       })),
     )}`,
     "",
-    'Response format: {"kind":"receipt","matched_rule_id":null,"confidence":0.95,"document_date":"2026-05-19","reason":"short reason"}',
+    'Response format: {"kind":"receipt","matched_rule_id":null,"confidence":0.95,"document_date":"2026-05-19","reason":"日本語での短い理由"}',
   ].join("\n");
 }
 
