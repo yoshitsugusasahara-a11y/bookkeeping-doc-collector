@@ -1,7 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { processSubmissionToMoneyForward } from "@/lib/receipts/process-submissions";
+import {
+  forceSendJournalOnly,
+  processSubmissionToMoneyForward,
+} from "@/lib/receipts/process-submissions";
 import {
   cleanupCustomerOldSubmissions,
   normalizeSubmissionRetentionLimit,
@@ -362,6 +365,47 @@ export async function processSingleMfSubmission(
       source: "admin_manual",
     });
     return { status: "success", message: "送信しました。" };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
+  }
+}
+
+export async function forceSendJournalOnlyAsAdmin(
+  customerId: string,
+  submissionId: string,
+): Promise<{ status: "success" | "skipped" | "error"; message: string }> {
+  if (!customerId || !submissionId) {
+    return { status: "error", message: "処理対象を特定できませんでした。" };
+  }
+
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  try {
+    const result = await forceSendJournalOnly({
+      supabase,
+      customerId,
+      submissionId,
+      source: "admin_manual",
+    });
+
+    revalidatePath(`/admin/customers/${customerId}`);
+
+    if (result.status === "success") {
+      return { status: "success", message: "証憑なしで送信しました。" };
+    }
+    if (result.status === "skipped") {
+      return {
+        status: "skipped",
+        message: result.message || "対象外のためスキップしました。",
+      };
+    }
+    return {
+      status: "error",
+      message: result.message || "送信に失敗しました。",
+    };
   } catch (error) {
     return { status: "error", message: getErrorMessage(error) };
   }

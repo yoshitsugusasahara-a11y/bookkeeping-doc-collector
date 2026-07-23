@@ -659,6 +659,90 @@ export async function processCustomerPendingOcr({
   return processed;
 }
 
+export async function forceSendJournalOnly({
+  supabase,
+  customerId,
+  submissionId,
+  source = null,
+}: {
+  supabase: SupabaseClient<Database>;
+  customerId: string;
+  submissionId: string;
+  source?: ActivitySource | null;
+}): Promise<{ status: "success" | "skipped" | "error"; message?: string }> {
+  const customer = await getCustomerDriveSettings({ supabase, customerId });
+  const submission = await getSubmissionForProcessing({
+    supabase,
+    submissionId,
+    customerId,
+  });
+
+  if (submission.mf_status === "sent") {
+    return { status: "skipped", message: "すでにMF送信済みです。" };
+  }
+
+  const ocr = getCompletedOcr(submission);
+  if (!ocr) {
+    return {
+      status: "skipped",
+      message: "OCR解析が完了していないため送信できません。",
+    };
+  }
+
+  try {
+    await submitReceiptToMoneyForward({
+      supabase,
+      customerAccountId: customerId,
+      submissionId: submission.id,
+      submittedAt: submission.submitted_at,
+      mimeType: submission.mime_type,
+      transactionNote: submission.transaction_note,
+      ocr,
+      customerJournalPrompt: customer.journal_prompt,
+    });
+
+    await logActivity({
+      supabase,
+      eventType: "mf_submit",
+      status: "success",
+      message: `${submission.file_name} を証憑ファイルなしで強制的にマネーフォワードへ送信しました。`,
+      customerAccountId: customerId,
+      submissionId: submission.id,
+      source,
+    });
+
+    return { status: "success" };
+  } catch (error) {
+    console.error("Failed to force send journal without attachment", error);
+
+    await supabase
+      .from("submissions")
+      .update({
+        mf_status: "failed",
+        mf_error:
+          error instanceof Error
+            ? error.message
+            : "証憑なし送信中にエラーが発生しました。",
+      })
+      .eq("id", submission.id);
+
+    await logActivity({
+      supabase,
+      eventType: "mf_submit",
+      status: "error",
+      message: `${submission.file_name} の証憑なし強制送信に失敗しました。${getErrorMessageForLog(error)}`,
+      customerAccountId: customerId,
+      submissionId: submission.id,
+      source,
+    });
+
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "送信に失敗しました。",
+    };
+  }
+}
+
 export async function processSubmissionToMoneyForward({
   supabase,
   customerId,

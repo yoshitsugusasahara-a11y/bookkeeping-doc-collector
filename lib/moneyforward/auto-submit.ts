@@ -40,7 +40,7 @@ export async function submitReceiptToMoneyForward({
   customerAccountId,
   submissionId,
   submittedAt,
-  file,
+  file = null,
   mimeType,
   transactionNote,
   ocr,
@@ -50,7 +50,7 @@ export async function submitReceiptToMoneyForward({
   customerAccountId: string;
   submissionId: string;
   submittedAt: string;
-  file: File;
+  file?: File | null;
   mimeType: string;
   transactionNote: string;
   ocr: ReceiptOcrResult;
@@ -131,13 +131,14 @@ export async function submitReceiptToMoneyForward({
     ? accountsResponse.accounts
     : [];
   const taxes = Array.isArray(taxesResponse.taxes) ? taxesResponse.taxes : [];
-  const extension = getExtensionFromMimeType(mimeType, file.name || "receipt");
-  const voucherFileName = buildVoucherFileName({
-    date: ocr.date,
-    amount: ocr.amount,
-    isCreditCard: ocr.is_credit_card,
-    extension,
-  });
+  const voucherFileName = file
+    ? buildVoucherFileName({
+        date: ocr.date,
+        amount: ocr.amount,
+        isCreditCard: ocr.is_credit_card,
+        extension: getExtensionFromMimeType(mimeType, file.name || "receipt"),
+      })
+    : "証憑ファイル添付なし";
   const journal = await generateMfJournalWithGemini({
     ocr,
     transactionNote,
@@ -152,17 +153,21 @@ export async function submitReceiptToMoneyForward({
     journal,
   });
   const journalId = extractJournalId(journalResponse);
-  const voucherResponse = await postMoneyForwardVouchers({
-    accessToken,
-    journalId,
-    voucherFiles: [
-      {
-        file_name: voucherFileName,
-        file_data: fileToBase64(await file.arrayBuffer()),
-      },
-    ],
-  });
-  const voucherFileId = voucherResponse.voucher_file_ids?.[0]?.file_id ?? null;
+
+  let voucherFileId: string | null = null;
+  if (file) {
+    const voucherResponse = await postMoneyForwardVouchers({
+      accessToken,
+      journalId,
+      voucherFiles: [
+        {
+          file_name: voucherFileName,
+          file_data: fileToBase64(await file.arrayBuffer()),
+        },
+      ],
+    });
+    voucherFileId = voucherResponse.voucher_file_ids?.[0]?.file_id ?? null;
+  }
 
   await supabase
     .from("submissions")

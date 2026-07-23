@@ -20,9 +20,12 @@ import { DisconnectMfButton } from "./disconnect-mf-button";
 import { DocumentRuleActions } from "./document-rule-actions";
 import { DocumentRuleForm } from "./document-rule-form";
 import { DriveSettingsForm } from "./drive-settings-form";
+import { ForceSendActionBar } from "./force-send-action-bar";
 import { JournalPromptForm } from "./journal-prompt-form";
 import { MfProcessForm } from "./mf-process-form";
 import { RetentionSettingsForm } from "./retention-settings-form";
+import { SubmissionCheckbox } from "./submission-checkbox";
+import { SubmissionSelectionProvider } from "./submission-selection-context";
 
 export const maxDuration = 60;
 
@@ -508,6 +511,7 @@ export default async function AdminCustomerDetailPage({
         </div>
       </section>
 
+      <SubmissionSelectionProvider>
       <section className="history-list" aria-label="顧客の送信履歴">
         <section className="settings-panel" aria-label="MF送信処理">
           <div className="section-heading">
@@ -520,6 +524,22 @@ export default async function AdminCustomerDetailPage({
             </div>
           </div>
           <MfProcessForm customerId={customer.id} />
+        </section>
+
+        <section className="settings-panel" aria-label="一括操作">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Bulk Action</p>
+              <h2>選択した資料を一括処理</h2>
+              <p className="muted">
+                一時ファイルの有無に関わらず、OCR解析済みの資料について、証憑ファイルを添付せずに現在の読み取り結果だけで仕訳を送信します。マネーフォワード連携の不具合等で通常送信ができないまま残っている資料の救済用です。
+              </p>
+            </div>
+          </div>
+          <ForceSendActionBar
+            customerId={customer.id}
+            submissionIds={submissions.map((item) => item.id)}
+          />
         </section>
 
         <section className="settings-panel" aria-label="送信履歴の絞り込み">
@@ -578,6 +598,7 @@ export default async function AdminCustomerDetailPage({
 
           return (
             <article className="submission-row" key={item.id}>
+              <SubmissionCheckbox submissionId={item.id} />
               <div className={`thumb ${tone}`}>
                 {item.thumbnail_url ? (
                   <img
@@ -692,6 +713,7 @@ export default async function AdminCustomerDetailPage({
           );
         })}
       </section>
+      </SubmissionSelectionProvider>
     </main>
   );
 }
