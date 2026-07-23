@@ -98,11 +98,16 @@ export default async function ClientSubmissionsPage({
   searchParams,
 }: {
   params: Promise<{ clientSlug: string }>;
-  searchParams: Promise<{ sent?: string; ocr?: string; filter?: string }>;
+  searchParams: Promise<{
+    sent?: string;
+    ocr?: string;
+    filter?: "unsent" | "mf_failed";
+  }>;
 }) {
   const { clientSlug } = await params;
   const { sent, ocr, filter } = await searchParams;
   const unsentOnly = filter === "unsent";
+  const mfFailedOnly = filter === "mf_failed";
   const supabase = await createClient();
   const user = await getCurrentUserOrRedirect(
     supabase,
@@ -111,7 +116,7 @@ export default async function ClientSubmissionsPage({
 
   const { data: account } = await supabase
     .from("customer_accounts")
-    .select("id, approval_status")
+    .select("id, approval_status, submission_retention_limit")
     .eq("user_id", user.id)
     .eq("client_slug", clientSlug)
     .maybeSingle();
@@ -133,7 +138,9 @@ export default async function ClientSubmissionsPage({
     .is("hidden_at", null)
     .order("submitted_at", { ascending: false });
 
-  if (unsentOnly) {
+  if (mfFailedOnly) {
+    submissionQuery = submissionQuery.eq("mf_status", "failed");
+  } else if (unsentOnly) {
     submissionQuery = submissionQuery.neq("mf_status", "sent");
   }
 
@@ -147,6 +154,36 @@ export default async function ClientSubmissionsPage({
   const documentRuleNameById = new Map(
     (documentRuleRows ?? []).map((rule) => [rule.id, rule.document_name]),
   );
+
+  const [
+    { count: allCount },
+    { count: unsentCount },
+    { count: mfFailedCount },
+    { count: storedCount },
+  ] = await Promise.all([
+    supabase
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_account_id", account.id)
+      .is("hidden_at", null),
+    supabase
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_account_id", account.id)
+      .is("hidden_at", null)
+      .neq("mf_status", "sent"),
+    supabase
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_account_id", account.id)
+      .is("hidden_at", null)
+      .eq("mf_status", "failed"),
+    supabase
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_account_id", account.id),
+  ]);
+  const retentionLimit = account.submission_retention_limit || 200;
 
   return (
     <main className="app-frame">
@@ -179,18 +216,30 @@ export default async function ClientSubmissionsPage({
 
       <div className="account-control-actions">
         <a
-          className={unsentOnly ? "secondary-action" : "primary-action"}
+          className={
+            !unsentOnly && !mfFailedOnly ? "primary-action" : "secondary-action"
+          }
           href={`/client/${clientSlug}/submissions`}
         >
-          すべて表示
+          すべて表示（{allCount ?? 0}）
         </a>
         <a
           className={unsentOnly ? "primary-action" : "secondary-action"}
           href={`/client/${clientSlug}/submissions?filter=unsent`}
         >
-          未送信のみ表示
+          未送信のみ表示（{unsentCount ?? 0}）
+        </a>
+        <a
+          className={mfFailedOnly ? "primary-action" : "secondary-action"}
+          href={`/client/${clientSlug}/submissions?filter=mf_failed`}
+        >
+          MF送信エラーのみ表示（{mfFailedCount ?? 0}）
         </a>
       </div>
+
+      <p className="muted">
+        資料保存件数: {storedCount ?? 0} / 上限{retentionLimit}件（上限を超えた古い資料から自動的に削除されます）
+      </p>
 
       {sent === "1" && (
         <section className="success-banner">
@@ -218,9 +267,11 @@ export default async function ClientSubmissionsPage({
       <section className="history-list" aria-label="送信済み資料">
         {submissions.length === 0 && (
           <div className="empty-state">
-            {unsentOnly
-              ? "未送信の送信履歴はありません。"
-              : "送信履歴はまだありません。"}
+            {mfFailedOnly
+              ? "MF送信エラーの送信履歴はありません。"
+              : unsentOnly
+                ? "未送信の送信履歴はありません。"
+                : "送信履歴はまだありません。"}
           </div>
         )}
         {submissions.map((item) => {
