@@ -333,6 +333,72 @@ h2 {
   width: 58px;
 }
 
+.file-drop.dragging {
+  background: var(--soft-blue);
+  border-color: var(--blue);
+}
+
+.pending-file-list {
+  display: grid;
+  gap: 12px;
+}
+
+.pending-file-card {
+  align-items: flex-start;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+}
+
+.pending-file-card.status-error {
+  border-color: var(--yellow);
+}
+
+.pending-file-preview {
+  align-items: center;
+  background: var(--soft-blue);
+  border-radius: 8px;
+  color: var(--blue);
+  display: flex;
+  flex: 0 0 auto;
+  height: 64px;
+  justify-content: center;
+  overflow: hidden;
+  width: 64px;
+}
+
+.pending-file-preview img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.pending-file-body {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pending-file-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.pending-file-head strong,
+.pending-file-head small {
+  overflow-wrap: anywhere;
+}
+
+.pending-file-head small {
+  color: var(--muted);
+  flex: 1 1 auto;
+}
+
 .field {
   display: grid;
   gap: 8px;
