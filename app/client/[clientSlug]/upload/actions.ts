@@ -8,7 +8,7 @@ import { processCustomerPendingOcr } from "@/lib/receipts/process-submissions";
 import { cleanupCustomerOldSubmissions } from "@/lib/receipts/retention";
 import { createClient } from "@/lib/supabase/server";
 
-type UploadState = {
+export type UploadState = {
   status: "idle" | "success" | "error";
   message: string;
 };
