@@ -35,6 +35,19 @@ function formatSubmittedAt(value: string) {
   }).format(new Date(value));
 }
 
+function formatSubmittedAtDate(value: string) {
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(value));
+  const year = parts.find((part) => part.type === "year")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+  return `${year}-${month}-${day}`;
+}
+
 export async function submitReceiptToMoneyForward({
   supabase,
   customerAccountId,
@@ -139,10 +152,14 @@ export async function submitReceiptToMoneyForward({
         extension: getExtensionFromMimeType(mimeType, file.name || "receipt"),
       })
     : "証憑ファイル添付なし";
+  const transactionDate = ocr.date || formatSubmittedAtDate(submittedAt);
+  const needsDateConfirmation = !ocr.date;
   const journal = await generateMfJournalWithGemini({
     ocr,
     transactionNote,
     voucherFileName,
+    transactionDate,
+    needsDateConfirmation,
     submissionTimestampLabel: formatSubmittedAt(submittedAt),
     customerJournalPrompt,
     accounts: accounts as never[],

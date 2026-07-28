@@ -238,13 +238,16 @@ function ensureVoucherFileNameInRemark({
 function normalizeTags({
   tags,
   allowAdditionalTags,
+  requiredTags = [],
 }: {
   tags: string[];
   allowAdditionalTags: boolean;
+  requiredTags?: string[];
 }) {
+  const baseTags = ["AI", ...requiredTags];
   const tagList = allowAdditionalTags
-    ? ["AI", ...tags.filter((tag) => tag !== "AI")]
-    : ["AI"];
+    ? [...baseTags, ...tags.filter((tag) => !baseTags.includes(tag))]
+    : baseTags;
 
   return Array.from(new Set(tagList))
     .map((tag) => tag.trim())
@@ -256,6 +259,8 @@ function buildPrompt({
   ocr,
   transactionNote,
   voucherFileName,
+  transactionDate,
+  needsDateConfirmation,
   submissionTimestampLabel,
   customerJournalPrompt,
   accounts,
@@ -264,6 +269,8 @@ function buildPrompt({
   ocr: ReceiptOcrResult;
   transactionNote: string;
   voucherFileName: string;
+  transactionDate: string;
+  needsDateConfirmation: boolean;
   submissionTimestampLabel: string;
   customerJournalPrompt: string | null;
   accounts: MfAccountOption[];
@@ -287,16 +294,21 @@ function buildPrompt({
     "顧客別指示にタグ指定がある場合は tags に追加してください。ただし AI タグは必ず含めてください。",
     "摘要 remark には顧客別指示を反映しても、添付ファイル名を必ず含めてください。",
     "金額は税込合計額を value に入れてください。",
+    "transaction_date には、指定された取引日をそのまま使用してください。OCR結果の日付と異なっていても、指定された取引日を優先してください。",
     "返答形式はJSONのみです。Markdown、説明文、前置き、後書きは含めないでください。",
     "",
     `OCR: ${JSON.stringify(ocr)}`,
     `ユーザー入力: ${transactionNote}`,
     `添付ファイル名: ${voucherFileName}`,
+    `取引日として必ず使用する日付: ${transactionDate}${needsDateConfirmation ? "（OCRで日付を読み取れなかったため、送信日を仮の取引日として使用しています）" : ""}`,
     `メモに入れる送信日時: ${submissionTimestampLabel}`,
     hasCustomerPrompt
       ? `顧客別の仕訳生成指示: ${customerJournalPrompt}`
       : "顧客別の仕訳生成指示: なし",
     'タグには必ず "AI" を含めてください。',
+    needsDateConfirmation
+      ? 'タグには "確認" も必ず含めてください（日付が推定のため、後で確認が必要です）。'
+      : "",
     `勘定科目候補: ${JSON.stringify(accounts.slice(0, 200))}`,
     `税区分候補: ${JSON.stringify(taxes.slice(0, 120))}`,
     "",
@@ -308,6 +320,8 @@ export async function generateMfJournalWithGemini({
   ocr,
   transactionNote,
   voucherFileName,
+  transactionDate,
+  needsDateConfirmation,
   submissionTimestampLabel,
   customerJournalPrompt = null,
   accounts,
@@ -316,6 +330,8 @@ export async function generateMfJournalWithGemini({
   ocr: ReceiptOcrResult;
   transactionNote: string;
   voucherFileName: string;
+  transactionDate: string;
+  needsDateConfirmation: boolean;
   submissionTimestampLabel: string;
   customerJournalPrompt?: string | null;
   accounts: MfAccountOption[];
@@ -352,6 +368,8 @@ export async function generateMfJournalWithGemini({
                       ocr,
                       transactionNote,
                       voucherFileName,
+                      transactionDate,
+                      needsDateConfirmation,
                       submissionTimestampLabel,
                       customerJournalPrompt,
                       accounts,
@@ -392,10 +410,12 @@ export async function generateMfJournalWithGemini({
 
       return {
         ...journal,
+        transaction_date: transactionDate,
         memo: submissionTimestampLabel.slice(0, 200),
         tags: normalizeTags({
           tags: journal.tags || [],
           allowAdditionalTags: hasCustomerPrompt,
+          requiredTags: needsDateConfirmation ? ["確認"] : [],
         }),
         branches: journal.branches.map((branch) => ({
           ...branch,
