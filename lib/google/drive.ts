@@ -45,6 +45,7 @@ export async function uploadFileToDrive({
 
   const response = await drive.files.create({
     fields: "id, webViewLink",
+    supportsAllDrives: true,
     requestBody: {
       name: fileName,
       parents: [folderId],
@@ -80,6 +81,7 @@ export async function moveDriveFile({
   const current = await drive.files.get({
     fileId,
     fields: "parents",
+    supportsAllDrives: true,
   });
   const previousParents = current.data.parents?.join(",");
 
@@ -88,6 +90,7 @@ export async function moveDriveFile({
     addParents: folderId,
     removeParents: previousParents,
     fields: "id, webViewLink",
+    supportsAllDrives: true,
   });
 
   if (!response.data.id) {
@@ -114,6 +117,7 @@ export async function renameDriveFile({
     fileId,
     requestBody: { name: fileName },
     fields: "id, webViewLink",
+    supportsAllDrives: true,
   });
 
   if (!response.data.id) {
