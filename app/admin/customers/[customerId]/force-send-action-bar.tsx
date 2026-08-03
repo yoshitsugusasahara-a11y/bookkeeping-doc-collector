@@ -74,7 +74,7 @@ export function ForceSendActionBar({
           onChange={() => selectAll(submissionIds)}
           disabled={isRunning}
         />
-        全て選択
+        このページを全て選択
       </label>
       <span className="muted">選択中: {selectedIds.length}件</span>
       <button

@@ -29,6 +29,22 @@ import { SubmissionSelectionProvider } from "./submission-selection-context";
 
 export const maxDuration = 60;
 
+const SUBMISSIONS_PER_PAGE = 50;
+
+type SubmissionFilter = "all" | "unsent" | "mf_failed" | "sent";
+
+function parseSubmissionFilter(value?: string): SubmissionFilter {
+  if (value === "all" || value === "mf_failed" || value === "sent") {
+    return value;
+  }
+  return "unsent";
+}
+
+function parsePageNumber(value?: string) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
 function getFileTypeLabel(mimeType: string) {
   if (mimeType === "application/pdf") return "PDF";
   if (mimeType.includes("heic") || mimeType.includes("heif")) return "HEIC";
@@ -113,23 +129,99 @@ export default async function AdminCustomerDetailPage({
   searchParams,
 }: {
   params: Promise<{ customerId: string }>;
-  searchParams: Promise<{ filter?: "unsent" | "mf_failed" | "sent" }>;
+  searchParams: Promise<{ filter?: string; page?: string }>;
 }) {
   const { customerId } = await params;
-  const { filter } = await searchParams;
-  const unsentOnly = filter === "unsent";
-  const mfFailedOnly = filter === "mf_failed";
-  const sentOnly = filter === "sent";
+  const { filter, page } = await searchParams;
+  const currentFilter = parseSubmissionFilter(filter);
+  const currentPage = parsePageNumber(page);
+  const unsentOnly = currentFilter === "unsent";
+  const mfFailedOnly = currentFilter === "mf_failed";
+  const sentOnly = currentFilter === "sent";
   const supabase = await createClient();
   const user = await getCurrentUserOrRedirect(supabase, "/admin/login");
 
-  try {
-    await ensureProfile(supabase, user);
-  } catch (profileError) {
-    console.error("Failed to save admin profile", profileError);
+  // プロフィール保存はRLS判定に影響しないので、以降のクエリと並行して実行する。
+  const profileSavePromise = ensureProfile(supabase, user).catch(
+    (profileError) => {
+      console.error("Failed to save admin profile", profileError);
+    },
+  );
+
+  // customerId は customer_accounts.id そのものなので、顧客レコードの取得を待たずに
+  // 関連クエリをまとめて並列実行できる。
+  const rangeFrom = (currentPage - 1) * SUBMISSIONS_PER_PAGE;
+  const submissionCountQuery = () =>
+    supabase
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_account_id", customerId)
+      .is("hidden_at", null);
+
+  let submissionQuery = supabase
+    .from("submissions")
+    .select(
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_updated_at, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+    )
+    .eq("customer_account_id", customerId)
+    .is("hidden_at", null);
+
+  if (mfFailedOnly) {
+    submissionQuery = submissionQuery.eq("mf_status", "failed");
+  } else if (sentOnly) {
+    submissionQuery = submissionQuery.eq("mf_status", "sent");
+  } else if (unsentOnly) {
+    submissionQuery = submissionQuery.neq("mf_status", "sent");
   }
 
-  const { data: isAdmin, error: adminError } = await supabase.rpc("is_admin");
+  const [
+    adminCheck,
+    customerResult,
+    submissionResult,
+    { count: allCount },
+    { count: unsentCount },
+    { count: mfFailedCount },
+    { count: sentCount },
+    { count: trashCount },
+    mfConnectionResult,
+    documentRuleResult,
+  ] = await Promise.all([
+    supabase.rpc("is_admin"),
+    supabase
+      .from("customer_accounts")
+      .select(
+        "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, irregular_drive_folder_id, irregular_drive_folder_name, journal_prompt, submission_retention_limit, created_at",
+      )
+      .eq("id", customerId)
+      .maybeSingle(),
+    submissionQuery
+      .order("submitted_at", { ascending: false })
+      .range(rangeFrom, rangeFrom + SUBMISSIONS_PER_PAGE - 1),
+    submissionCountQuery(),
+    submissionCountQuery().neq("mf_status", "sent"),
+    submissionCountQuery().eq("mf_status", "failed"),
+    submissionCountQuery().eq("mf_status", "sent"),
+    supabase
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_account_id", customerId)
+      .not("hidden_at", "is", null),
+    supabase
+      .from("mf_connections")
+      .select("connected_at, expires_at, scope")
+      .eq("customer_account_id", customerId)
+      .maybeSingle(),
+    supabase
+      .from("document_rules")
+      .select(
+        "id, document_name, match_features, file_name_rule, drive_folder_id, drive_folder_name, is_active, created_at",
+      )
+      .eq("customer_account_id", customerId)
+      .order("created_at", { ascending: true }),
+    profileSavePromise,
+  ]);
+
+  const { data: isAdmin, error: adminError } = adminCheck;
 
   if (adminError) {
     throw adminError;
@@ -153,13 +245,7 @@ export default async function AdminCustomerDetailPage({
     );
   }
 
-  const { data: customer, error: customerError } = await supabase
-    .from("customer_accounts")
-    .select(
-      "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, irregular_drive_folder_id, irregular_drive_folder_name, journal_prompt, submission_retention_limit, created_at",
-    )
-    .eq("id", customerId)
-    .maybeSingle();
+  const { data: customer, error: customerError } = customerResult;
 
   if (customerError) {
     console.error("Failed to fetch admin customer detail", customerError);
@@ -199,77 +285,70 @@ export default async function AdminCustomerDetailPage({
     .eq("id", customer.user_id)
     .maybeSingle();
 
-  let submissionQuery = supabase
-    .from("submissions")
-    .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_updated_at, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
-    )
-    .eq("customer_account_id", customer.id)
-    .is("hidden_at", null)
-    .order("submitted_at", { ascending: false });
+  const submissions = submissionResult.data ?? [];
+  const mfConnection = mfConnectionResult.data;
+  const documentRules = documentRuleResult.data ?? [];
 
-  if (mfFailedOnly) {
-    submissionQuery = submissionQuery.eq("mf_status", "failed");
-  } else if (sentOnly) {
-    submissionQuery = submissionQuery.eq("mf_status", "sent");
-  } else if (unsentOnly) {
-    submissionQuery = submissionQuery.neq("mf_status", "sent");
-  }
+  const filteredCount =
+    (mfFailedOnly
+      ? mfFailedCount
+      : sentOnly
+        ? sentCount
+        : unsentOnly
+          ? unsentCount
+          : allCount) ?? 0;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredCount / SUBMISSIONS_PER_PAGE),
+  );
 
-  const { data: submissionRows } = await submissionQuery;
-  const submissions = submissionRows ?? [];
+  const buildListHref = (
+    targetFilter: SubmissionFilter,
+    targetPage: number = 1,
+  ) => {
+    const query = new URLSearchParams({ filter: targetFilter });
+    if (targetPage > 1) {
+      query.set("page", String(targetPage));
+    }
+    return `/admin/customers/${customer.id}?${query.toString()}`;
+  };
 
-  const [
-    { count: allCount },
-    { count: unsentCount },
-    { count: mfFailedCount },
-    { count: sentCount },
-    { count: trashCount },
-  ] = await Promise.all([
-    supabase
-      .from("submissions")
-      .select("id", { count: "exact", head: true })
-      .eq("customer_account_id", customer.id)
-      .is("hidden_at", null),
-    supabase
-      .from("submissions")
-      .select("id", { count: "exact", head: true })
-      .eq("customer_account_id", customer.id)
-      .is("hidden_at", null)
-      .neq("mf_status", "sent"),
-    supabase
-      .from("submissions")
-      .select("id", { count: "exact", head: true })
-      .eq("customer_account_id", customer.id)
-      .is("hidden_at", null)
-      .eq("mf_status", "failed"),
-    supabase
-      .from("submissions")
-      .select("id", { count: "exact", head: true })
-      .eq("customer_account_id", customer.id)
-      .is("hidden_at", null)
-      .eq("mf_status", "sent"),
-    supabase
-      .from("submissions")
-      .select("id", { count: "exact", head: true })
-      .eq("customer_account_id", customer.id)
-      .not("hidden_at", "is", null),
-  ]);
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
 
-  const { data: mfConnection } = await supabase
-    .from("mf_connections")
-    .select("connected_at, expires_at, scope")
-    .eq("customer_account_id", customer.id)
-    .maybeSingle();
+    return (
+      <nav className="pagination-bar" aria-label="送信履歴のページ送り">
+        {currentPage > 1 ? (
+          <a
+            className="secondary-action compact-action"
+            href={buildListHref(currentFilter, currentPage - 1)}
+          >
+            前へ
+          </a>
+        ) : (
+          <span className="secondary-action compact-action is-disabled">
+            前へ
+          </span>
+        )}
+        <span className="muted">
+          {currentPage} / {totalPages} ページ（全{filteredCount}件）
+        </span>
+        {currentPage < totalPages ? (
+          <a
+            className="secondary-action compact-action"
+            href={buildListHref(currentFilter, currentPage + 1)}
+          >
+            次へ
+          </a>
+        ) : (
+          <span className="secondary-action compact-action is-disabled">
+            次へ
+          </span>
+        )}
+      </nav>
+    );
+  };
 
-  const { data: documentRuleRows } = await supabase
-    .from("document_rules")
-    .select(
-      "id, document_name, match_features, file_name_rule, drive_folder_id, drive_folder_name, is_active, created_at",
-    )
-    .eq("customer_account_id", customer.id)
-    .order("created_at", { ascending: true });
-  const documentRules = documentRuleRows ?? [];
   const documentRuleNameById = new Map(
     documentRules.map((rule) => [rule.id, rule.document_name]),
   );
@@ -299,7 +378,7 @@ export default async function AdminCustomerDetailPage({
         </div>
         <div className="metric">
           <small>送信数</small>
-          <strong>{submissions.length}</strong>
+          <strong>{allCount ?? 0}</strong>
         </div>
         <div className="metric">
           <small>MF連携</small>
@@ -532,7 +611,7 @@ export default async function AdminCustomerDetailPage({
               <p className="eyebrow">Bulk Action</p>
               <h2>選択した資料を一括処理</h2>
               <p className="muted">
-                一時ファイルの有無に関わらず、OCR解析済みの資料について、証憑ファイルを添付せずに現在の読み取り結果だけで仕訳を送信します。マネーフォワード連携の不具合等で通常送信ができないまま残っている資料の救済用です。
+                一時ファイルの有無に関わらず、OCR解析済みの資料について、証憑ファイルを添付せずに現在の読み取り結果だけで仕訳を送信します。マネーフォワード連携の不具合等で通常送信ができないまま残っている資料の救済用です。「全て選択」の対象は表示中のページ内の資料のみです。
               </p>
             </div>
           </div>
@@ -545,32 +624,30 @@ export default async function AdminCustomerDetailPage({
         <section className="settings-panel" aria-label="送信履歴の絞り込み">
           <div className="account-control-actions">
             <a
-              className={
-                !unsentOnly && !mfFailedOnly && !sentOnly
-                  ? "primary-action"
-                  : "secondary-action"
-              }
-              href={`/admin/customers/${customer.id}`}
-            >
-              すべて表示（{allCount ?? 0}）
-            </a>
-            <a
               className={unsentOnly ? "primary-action" : "secondary-action"}
-              href={`/admin/customers/${customer.id}?filter=unsent`}
+              href={buildListHref("unsent")}
             >
               未送信のみ表示（{unsentCount ?? 0}）
             </a>
             <a
               className={mfFailedOnly ? "primary-action" : "secondary-action"}
-              href={`/admin/customers/${customer.id}?filter=mf_failed`}
+              href={buildListHref("mf_failed")}
             >
               MF送信エラーのみ表示（{mfFailedCount ?? 0}）
             </a>
             <a
               className={sentOnly ? "primary-action" : "secondary-action"}
-              href={`/admin/customers/${customer.id}?filter=sent`}
+              href={buildListHref("sent")}
             >
               送信済みのみ表示（{sentCount ?? 0}）
+            </a>
+            <a
+              className={
+                currentFilter === "all" ? "primary-action" : "secondary-action"
+              }
+              href={buildListHref("all")}
+            >
+              すべて表示（{allCount ?? 0}）
             </a>
             <a
               className="secondary-action"
@@ -579,19 +656,35 @@ export default async function AdminCustomerDetailPage({
               ゴミ箱を見る（{trashCount ?? 0}）
             </a>
           </div>
+          <p className="muted">
+            1ページあたり{SUBMISSIONS_PER_PAGE}件ずつ表示します。初期表示は「未送信のみ」です。
+          </p>
         </section>
 
-        {submissions.length === 0 && (
-          <div className="empty-state">
-            {mfFailedOnly
-              ? "MF送信エラーの送信履歴はありません。"
-              : sentOnly
-                ? "送信済みの送信履歴はありません。"
-                : unsentOnly
-                  ? "未送信の送信履歴はありません。"
-                  : "送信履歴はまだありません。"}
-          </div>
-        )}
+        {renderPagination()}
+
+        {submissions.length === 0 &&
+          (currentPage > 1 ? (
+            <div className="empty-state">
+              <p>このページに表示できる資料はありません。</p>
+              <a
+                className="secondary-action compact-action"
+                href={buildListHref(currentFilter)}
+              >
+                1ページ目へ戻る
+              </a>
+            </div>
+          ) : (
+            <div className="empty-state">
+              {mfFailedOnly
+                ? "MF送信エラーの送信履歴はありません。"
+                : sentOnly
+                  ? "送信済みの送信履歴はありません。"
+                  : unsentOnly
+                    ? "未送信の送信履歴はありません。"
+                    : "送信履歴はまだありません。"}
+            </div>
+          ))}
         {submissions.map((item) => {
           const typeLabel = getFileTypeLabel(item.mime_type);
           const tone = getThumbTone(item.mime_type);
@@ -712,6 +805,8 @@ export default async function AdminCustomerDetailPage({
             </article>
           );
         })}
+
+        {renderPagination()}
       </section>
       </SubmissionSelectionProvider>
     </main>

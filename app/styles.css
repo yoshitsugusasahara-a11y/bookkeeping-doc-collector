@@ -1134,6 +1134,20 @@ textarea {
   gap: 10px;
 }
 
+.pagination-bar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.secondary-action.is-disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 .delete-confirm-form label {
   align-items: center;
   color: var(--muted);

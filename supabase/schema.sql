@@ -181,6 +181,10 @@ create index if not exists submissions_submitted_at_idx
 create index if not exists submissions_hidden_at_idx
   on public.submissions(hidden_at);
 
+-- 顧客詳細・送信履歴のページング（顧客で絞り込み、送信日時の降順）を高速化する。
+create index if not exists submissions_customer_submitted_at_idx
+  on public.submissions(customer_account_id, submitted_at desc);
+
 create index if not exists mf_connections_user_id_idx
   on public.mf_connections(user_id);
 
