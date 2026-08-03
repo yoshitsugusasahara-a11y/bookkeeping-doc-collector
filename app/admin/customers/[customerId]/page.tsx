@@ -129,10 +129,11 @@ export default async function AdminCustomerDetailPage({
   searchParams,
 }: {
   params: Promise<{ customerId: string }>;
-  searchParams: Promise<{ filter?: string; page?: string }>;
+  searchParams: Promise<{ filter?: string; page?: string; tab?: string }>;
 }) {
   const { customerId } = await params;
-  const { filter, page } = await searchParams;
+  const { filter, page, tab } = await searchParams;
+  const isSettingsTab = tab === "settings";
   const currentFilter = parseSubmissionFilter(filter);
   const currentPage = parsePageNumber(page);
   const unsentOnly = currentFilter === "unsent";
@@ -313,6 +314,8 @@ export default async function AdminCustomerDetailPage({
     return `/admin/customers/${customer.id}?${query.toString()}`;
   };
 
+  const settingsHref = `/admin/customers/${customer.id}?tab=settings`;
+
   const renderPagination = () => {
     if (totalPages <= 1) return null;
 
@@ -386,429 +389,448 @@ export default async function AdminCustomerDetailPage({
         </div>
       </section>
 
-      <section className="settings-panel" aria-label="顧客アカウント操作">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Account Control</p>
-            <h2>顧客アカウント操作</h2>
-            <p className="muted">
-              利用停止にすると顧客側の送信・履歴・設定・MF送信を停止し、MF連携も解除します。
-              削除はアプリ内データを消す不可逆操作です。
-            </p>
-          </div>
-          <span className={getCustomerStatusClass(customer.approval_status)}>
-            {getCustomerStatusLabel(customer.approval_status)}
-          </span>
-        </div>
-        <div className="account-control-actions">
-          {isApproved && (
-            <CustomerAccountToggleButton
-              action="suspend"
-              accountId={customer.id}
-              className="danger-action"
-            />
+      <nav className="mobile-tabs" aria-label="顧客詳細メニュー">
+        <a
+          className={!isSettingsTab ? "tab active" : "tab"}
+          href={buildListHref(currentFilter)}
+        >
+          送信履歴
+        </a>
+        <a
+          className={isSettingsTab ? "tab active" : "tab"}
+          href={settingsHref}
+        >
+          設定
+        </a>
+      </nav>
+
+      {isSettingsTab ? (
+        <>
+          {!(
+            customer.drive_folder_id &&
+            customer.error_drive_folder_id &&
+            customer.irregular_drive_folder_id
+          ) && (
+            <section className="warning-banner">
+              <AlertTriangle size={18} />
+              <span>
+                この顧客は「レシート保存フォルダ」「エラーフォルダ」「ルールが存在しない資料フォルダ」のいずれかが未設定です。3つすべて設定するまで、顧客側で資料をアップロードできません。
+              </span>
+            </section>
           )}
-          {isSuspended && (
-            <>
-              <CustomerAccountToggleButton
-                action="resume"
-                accountId={customer.id}
-                className="primary-action"
-              />
-              <form className="delete-confirm-form" action={deleteCustomerAccount}>
-                <input type="hidden" name="accountId" value={customer.id} />
-                <label>
-                  <input
-                    type="checkbox"
-                    name="confirmDelete"
-                    value="true"
-                    required
-                  />
-                  削除することを確認
-                </label>
-                <CustomerAccountActionButton
-                  action="delete"
+
+          <section className="settings-panel" aria-label="顧客アカウント操作">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Account Control</p>
+                <h2>顧客アカウント操作</h2>
+                <p className="muted">
+                  利用停止にすると顧客側の送信・履歴・設定・MF送信を停止し、MF連携も解除します。
+                  削除はアプリ内データを消す不可逆操作です。
+                </p>
+              </div>
+              <span className={getCustomerStatusClass(customer.approval_status)}>
+                {getCustomerStatusLabel(customer.approval_status)}
+              </span>
+            </div>
+            <div className="account-control-actions">
+              {isApproved && (
+                <CustomerAccountToggleButton
+                  action="suspend"
+                  accountId={customer.id}
                   className="danger-action"
                 />
-              </form>
-            </>
-          )}
-          {!isApproved && !isSuspended && (
-            <p className="muted">
-              承認待ちまたは却下状態の顧客です。承認は顧客一覧から行えます。
-            </p>
-          )}
-        </div>
-      </section>
-
-      {!(
-        customer.drive_folder_id &&
-        customer.error_drive_folder_id &&
-        customer.irregular_drive_folder_id
-      ) && (
-        <section className="warning-banner">
-          <AlertTriangle size={18} />
-          <span>
-            この顧客は「レシート保存フォルダ」「エラーフォルダ」「ルールが存在しない資料フォルダ」のいずれかが未設定です。3つすべて設定するまで、顧客側で資料をアップロードできません。
-          </span>
-        </section>
-      )}
-
-      <section className="settings-panel" aria-label="マネーフォワード連携">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Money Forward</p>
-            <h2>マネーフォワード連携</h2>
-          </div>
-          <span className={mfConnection ? "pill approved" : "pill pending"}>
-            {mfConnection ? "連携済み" : "未連携"}
-          </span>
-        </div>
-        {mfConnection ? (
-          <>
-            <dl className="connection-details">
-              <div>
-                <dt>連携日時</dt>
-                <dd>{formatAdminDateTime(mfConnection.connected_at)}</dd>
-              </div>
-              <div>
-                <dt>有効期限</dt>
-                <dd>{formatAdminDateTime(mfConnection.expires_at)}</dd>
-              </div>
-            </dl>
-            <DisconnectMfButton customerId={customer.id} />
-            <p className="muted">
-              解除すると、このアプリから当該顧客のMFへ送信できなくなります。MF側の連携中アプリ一覧でも、必要に応じて連携解除してください。
-            </p>
-          </>
-        ) : (
-          <p className="muted">
-            まだ顧客側でマネーフォワード連携が完了していません。
-          </p>
-        )}
-      </section>
-
-      <section className="settings-panel" aria-label="Google Drive保存先">
-        <div>
-          <p className="eyebrow">Google Drive</p>
-          <h2>保存先フォルダ</h2>
-          <p className="muted">
-            レシート保存フォルダ・エラーフォルダ・ルールが存在しない資料フォルダの3つすべてを設定するまで、顧客側で資料をアップロードできません。
-          </p>
-        </div>
-        <DriveSettingsForm
-          customerId={customer.id}
-          driveFolderId={customer.drive_folder_id}
-          driveFolderName={customer.drive_folder_name}
-          errorDriveFolderId={customer.error_drive_folder_id}
-          errorDriveFolderName={customer.error_drive_folder_name}
-          irregularDriveFolderId={customer.irregular_drive_folder_id}
-          irregularDriveFolderName={customer.irregular_drive_folder_name}
-        />
-      </section>
-
-      <section className="settings-panel" aria-label="仕訳生成指示">
-        <div>
-          <p className="eyebrow">Journal Prompt</p>
-          <h2>仕訳生成指示</h2>
-          <p className="muted">
-            レシート・領収書からMF仕訳を作成するときに、勘定科目、補助科目、摘要、タグの判断へ反映する指示です。
-          </p>
-        </div>
-        <JournalPromptForm
-          customerId={customer.id}
-          journalPrompt={customer.journal_prompt}
-        />
-      </section>
-
-      <section className="settings-panel" aria-label="資料保存上限">
-        <div>
-          <p className="eyebrow">Storage Limit</p>
-          <h2>資料保存上限</h2>
-          <p className="muted">
-            Supabaseに残す履歴件数を顧客ごとに設定します。上限を超えた古い資料は、アプリ内の履歴から削除されます。
-          </p>
-        </div>
-        <RetentionSettingsForm
-          customerId={customer.id}
-          submissionRetentionLimit={customer.submission_retention_limit || 200}
-        />
-      </section>
-
-      <section className="settings-panel" aria-label="資料分類ルール">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Document Rules</p>
-            <h2>資料分類ルール</h2>
-            <p className="muted">
-              レシート以外の資料を判定し、指定したファイル名とGoogle Driveフォルダへ保存するためのルールです。
-            </p>
-          </div>
-          <a
-            className="secondary-action compact-action"
-            href={`/admin/customers/${customer.id}/document-rules.csv`}
-          >
-            <Download size={16} />
-            CSVダウンロード
-          </a>
-        </div>
-
-        <DocumentRuleForm customerId={customer.id} />
-
-        <div className="document-rule-list">
-          {documentRules.length === 0 ? (
-            <div className="empty-state">資料分類ルールはまだありません。</div>
-          ) : (
-            documentRules.map((rule) => (
-              <article className="document-rule-card" key={rule.id}>
-                <div>
-                  <div className="rule-title-row">
-                    <strong>{rule.document_name}</strong>
-                    <span className={rule.is_active ? "pill approved" : "pill pending"}>
-                      {rule.is_active ? "有効" : "無効"}
-                    </span>
-                  </div>
-                  <small>ファイル名ルール: {rule.file_name_rule}</small>
-                  {rule.match_features && (
-                    <small>特徴: {rule.match_features}</small>
-                  )}
-                  {(rule.drive_folder_name || rule.drive_folder_id) && (
-                    <small>
-                      保存先: {rule.drive_folder_name || "名称未設定"}
-                      {rule.drive_folder_id ? ` / ${rule.drive_folder_id}` : ""}
-                    </small>
-                  )}
-                </div>
-                <DocumentRuleActions
-                  customerId={customer.id}
-                  ruleId={rule.id}
-                  isActive={rule.is_active}
-                />
-              </article>
-            ))
-          )}
-        </div>
-      </section>
-
-      <SubmissionSelectionProvider>
-      <section className="history-list" aria-label="顧客の送信履歴">
-        <section className="settings-panel" aria-label="MF送信処理">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Batch Process</p>
-              <h2>MF送信処理</h2>
-              <p className="muted">
-                未処理の送信分について、Google Drive保存、OCR解析、MF仕訳送信、証憑添付を1件ずつ順番に実行します。進捗と結果は下に表示されます。
-              </p>
-            </div>
-          </div>
-          <MfProcessForm customerId={customer.id} />
-        </section>
-
-        <section className="settings-panel" aria-label="一括操作">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Bulk Action</p>
-              <h2>選択した資料を一括処理</h2>
-              <p className="muted">
-                一時ファイルの有無に関わらず、OCR解析済みの資料について、証憑ファイルを添付せずに現在の読み取り結果だけで仕訳を送信します。マネーフォワード連携の不具合等で通常送信ができないまま残っている資料の救済用です。「全て選択」の対象は表示中のページ内の資料のみです。
-              </p>
-            </div>
-          </div>
-          <ForceSendActionBar
-            customerId={customer.id}
-            submissionIds={submissions.map((item) => item.id)}
-          />
-        </section>
-
-        <section className="settings-panel" aria-label="送信履歴の絞り込み">
-          <div className="account-control-actions">
-            <a
-              className={unsentOnly ? "primary-action" : "secondary-action"}
-              href={buildListHref("unsent")}
-            >
-              未送信のみ表示（{unsentCount ?? 0}）
-            </a>
-            <a
-              className={mfFailedOnly ? "primary-action" : "secondary-action"}
-              href={buildListHref("mf_failed")}
-            >
-              MF送信エラーのみ表示（{mfFailedCount ?? 0}）
-            </a>
-            <a
-              className={sentOnly ? "primary-action" : "secondary-action"}
-              href={buildListHref("sent")}
-            >
-              送信済みのみ表示（{sentCount ?? 0}）
-            </a>
-            <a
-              className={
-                currentFilter === "all" ? "primary-action" : "secondary-action"
-              }
-              href={buildListHref("all")}
-            >
-              すべて表示（{allCount ?? 0}）
-            </a>
-            <a
-              className="secondary-action"
-              href={`/admin/customers/${customer.id}/trash`}
-            >
-              ゴミ箱を見る（{trashCount ?? 0}）
-            </a>
-          </div>
-          <p className="muted">
-            1ページあたり{SUBMISSIONS_PER_PAGE}件ずつ表示します。初期表示は「未送信のみ」です。
-          </p>
-        </section>
-
-        {renderPagination()}
-
-        {submissions.length === 0 &&
-          (currentPage > 1 ? (
-            <div className="empty-state">
-              <p>このページに表示できる資料はありません。</p>
-              <a
-                className="secondary-action compact-action"
-                href={buildListHref(currentFilter)}
-              >
-                1ページ目へ戻る
-              </a>
-            </div>
-          ) : (
-            <div className="empty-state">
-              {mfFailedOnly
-                ? "MF送信エラーの送信履歴はありません。"
-                : sentOnly
-                  ? "送信済みの送信履歴はありません。"
-                  : unsentOnly
-                    ? "未送信の送信履歴はありません。"
-                    : "送信履歴はまだありません。"}
-            </div>
-          ))}
-        {submissions.map((item) => {
-          const typeLabel = getFileTypeLabel(item.mime_type);
-          const tone = getThumbTone(item.mime_type);
-
-          return (
-            <article className="submission-row" key={item.id}>
-              <SubmissionCheckbox submissionId={item.id} />
-              <div className={`thumb ${tone}`}>
-                {item.thumbnail_url ? (
-                  <img
-                    className="history-thumb-image"
-                    src={item.thumbnail_url}
-                    alt={`${item.file_name}のサムネイル`}
+              )}
+              {isSuspended && (
+                <>
+                  <CustomerAccountToggleButton
+                    action="resume"
+                    accountId={customer.id}
+                    className="primary-action"
                   />
-                ) : typeLabel === "PDF" ? (
-                  <FileText size={28} />
-                ) : (
-                  <ImageIcon size={28} />
-                )}
-                {!item.thumbnail_url && <span>{typeLabel}</span>}
+                  <form className="delete-confirm-form" action={deleteCustomerAccount}>
+                    <input type="hidden" name="accountId" value={customer.id} />
+                    <label>
+                      <input
+                        type="checkbox"
+                        name="confirmDelete"
+                        value="true"
+                        required
+                      />
+                      削除することを確認
+                    </label>
+                    <CustomerAccountActionButton
+                      action="delete"
+                      className="danger-action"
+                    />
+                  </form>
+                </>
+              )}
+              {!isApproved && !isSuspended && (
+                <p className="muted">
+                  承認待ちまたは却下状態の顧客です。承認は顧客一覧から行えます。
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section className="settings-panel" aria-label="マネーフォワード連携">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Money Forward</p>
+                <h2>マネーフォワード連携</h2>
               </div>
-              <div className="submission-copy">
-                <strong>{item.transaction_note}</strong>
-                <small>{item.file_name}</small>
-                <small>
-                  {formatSubmittedAt(item.submitted_at)} /{" "}
-                  {(item.file_size / 1024).toFixed(1)} KB
-                </small>
-                {item.drive_view_url && (
-                  <a
-                    className="inline-link"
-                    href={item.drive_view_url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <ExternalLink size={14} />
-                    Driveで開く
-                  </a>
-                )}
-                <dl className="ocr-summary">
+              <span className={mfConnection ? "pill approved" : "pill pending"}>
+                {mfConnection ? "連携済み" : "未連携"}
+              </span>
+            </div>
+            {mfConnection ? (
+              <>
+                <dl className="connection-details">
                   <div>
-                    <dt>資料分類</dt>
-                    <dd>
-                      {getDocumentClassificationStatusLabel(
-                        item.document_classification_status,
-                        documentRules.length > 0,
-                      )}
-                    </dd>
+                    <dt>連携日時</dt>
+                    <dd>{formatAdminDateTime(mfConnection.connected_at)}</dd>
                   </div>
                   <div>
-                    <dt>判定</dt>
-                    <dd>{getDocumentKindLabel(item.document_kind)}</dd>
-                  </div>
-                  <div>
-                    <dt>一致ルール</dt>
-                    <dd>
-                      {item.document_rule_id
-                        ? documentRuleNameById.get(item.document_rule_id) ||
-                          item.document_rule_id
-                        : "なし"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>信頼度</dt>
-                    <dd>{formatConfidence(item.document_confidence)}</dd>
-                  </div>
-                  <div>
-                    <dt>Drive保存名</dt>
-                    <dd>{item.document_drive_file_name || "未保存"}</dd>
-                  </div>
-                  <div>
-                    <dt>状態</dt>
-                    <dd>{getOcrStatusLabel(item.ocr_status)}</dd>
-                  </div>
-                  <div>
-                    <dt>MF送信</dt>
-                    <dd>{getMfStatusLabel(item.mf_status)}</dd>
-                  </div>
-                  <div>
-                    <dt>MF送信日時</dt>
-                    <dd>
-                      {item.mf_sent_at
-                        ? formatSubmittedAt(item.mf_sent_at)
-                        : "未送信"}
-                    </dd>
+                    <dt>有効期限</dt>
+                    <dd>{formatAdminDateTime(mfConnection.expires_at)}</dd>
                   </div>
                 </dl>
-                <AdminOcrEditForm
-                  customerId={customer.id}
-                  submissionId={item.id}
-                  isSent={item.mf_status === "sent"}
-                  ocrDate={item.ocr_date}
-                  ocrAmount={item.ocr_amount}
-                  ocrStore={item.ocr_store}
-                  ocrSummary={item.ocr_summary}
-                  ocrPaymentMethod={item.ocr_payment_method}
-                  ocrIsCreditCard={item.ocr_is_credit_card}
-                  ocrUpdatedAt={item.ocr_updated_at}
-                />
-                {item.ocr_error && (
-                  <small className="warning-text">OCR: {item.ocr_error}</small>
-                )}
-                {item.document_error && (
-                  <small className="warning-text">
-                    Gemini分類: {item.document_error}
-                  </small>
-                )}
-                {item.mf_error && (
-                  <small className="warning-text">MF: {item.mf_error}</small>
-                )}
-                {item.mf_status !== "sent" && (
-                  <DeleteSubmissionButton
-                    action={hideSubmission}
-                    args={[customer.id, item.id]}
-                  />
-                )}
-              </div>
-            </article>
-          );
-        })}
+                <DisconnectMfButton customerId={customer.id} />
+                <p className="muted">
+                  解除すると、このアプリから当該顧客のMFへ送信できなくなります。MF側の連携中アプリ一覧でも、必要に応じて連携解除してください。
+                </p>
+              </>
+            ) : (
+              <p className="muted">
+                まだ顧客側でマネーフォワード連携が完了していません。
+              </p>
+            )}
+          </section>
 
-        {renderPagination()}
-      </section>
-      </SubmissionSelectionProvider>
+          <section className="settings-panel" aria-label="Google Drive保存先">
+            <div>
+              <p className="eyebrow">Google Drive</p>
+              <h2>保存先フォルダ</h2>
+              <p className="muted">
+                レシート保存フォルダ・エラーフォルダ・ルールが存在しない資料フォルダの3つすべてを設定するまで、顧客側で資料をアップロードできません。
+              </p>
+            </div>
+            <DriveSettingsForm
+              customerId={customer.id}
+              driveFolderId={customer.drive_folder_id}
+              driveFolderName={customer.drive_folder_name}
+              errorDriveFolderId={customer.error_drive_folder_id}
+              errorDriveFolderName={customer.error_drive_folder_name}
+              irregularDriveFolderId={customer.irregular_drive_folder_id}
+              irregularDriveFolderName={customer.irregular_drive_folder_name}
+            />
+          </section>
+
+          <section className="settings-panel" aria-label="仕訳生成指示">
+            <div>
+              <p className="eyebrow">Journal Prompt</p>
+              <h2>仕訳生成指示</h2>
+              <p className="muted">
+                レシート・領収書からMF仕訳を作成するときに、勘定科目、補助科目、摘要、タグの判断へ反映する指示です。
+              </p>
+            </div>
+            <JournalPromptForm
+              customerId={customer.id}
+              journalPrompt={customer.journal_prompt}
+            />
+          </section>
+
+          <section className="settings-panel" aria-label="資料保存上限">
+            <div>
+              <p className="eyebrow">Storage Limit</p>
+              <h2>資料保存上限</h2>
+              <p className="muted">
+                Supabaseに残す履歴件数を顧客ごとに設定します。上限を超えた古い資料は、アプリ内の履歴から削除されます。
+              </p>
+            </div>
+            <RetentionSettingsForm
+              customerId={customer.id}
+              submissionRetentionLimit={customer.submission_retention_limit || 200}
+            />
+          </section>
+
+          <section className="settings-panel" aria-label="資料分類ルール">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Document Rules</p>
+                <h2>資料分類ルール</h2>
+                <p className="muted">
+                  レシート以外の資料を判定し、指定したファイル名とGoogle Driveフォルダへ保存するためのルールです。
+                </p>
+              </div>
+              <a
+                className="secondary-action compact-action"
+                href={`/admin/customers/${customer.id}/document-rules.csv`}
+              >
+                <Download size={16} />
+                CSVダウンロード
+              </a>
+            </div>
+
+            <DocumentRuleForm customerId={customer.id} />
+
+            <div className="document-rule-list">
+              {documentRules.length === 0 ? (
+                <div className="empty-state">資料分類ルールはまだありません。</div>
+              ) : (
+                documentRules.map((rule) => (
+                  <article className="document-rule-card" key={rule.id}>
+                    <div>
+                      <div className="rule-title-row">
+                        <strong>{rule.document_name}</strong>
+                        <span className={rule.is_active ? "pill approved" : "pill pending"}>
+                          {rule.is_active ? "有効" : "無効"}
+                        </span>
+                      </div>
+                      <small>ファイル名ルール: {rule.file_name_rule}</small>
+                      {rule.match_features && (
+                        <small>特徴: {rule.match_features}</small>
+                      )}
+                      {(rule.drive_folder_name || rule.drive_folder_id) && (
+                        <small>
+                          保存先: {rule.drive_folder_name || "名称未設定"}
+                          {rule.drive_folder_id ? ` / ${rule.drive_folder_id}` : ""}
+                        </small>
+                      )}
+                    </div>
+                    <DocumentRuleActions
+                      customerId={customer.id}
+                      ruleId={rule.id}
+                      isActive={rule.is_active}
+                    />
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        </>
+      ) : (
+        <SubmissionSelectionProvider>
+          <section className="history-list" aria-label="顧客の送信履歴">
+            <section className="settings-panel" aria-label="MF送信処理">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Batch Process</p>
+                  <h2>MF送信処理</h2>
+                  <p className="muted">
+                    未処理の送信分について、Google Drive保存、OCR解析、MF仕訳送信、証憑添付を1件ずつ順番に実行します。進捗と結果は下に表示されます。
+                  </p>
+                </div>
+              </div>
+              <MfProcessForm customerId={customer.id} />
+            </section>
+
+            <section className="settings-panel" aria-label="一括操作">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">Bulk Action</p>
+                  <h2>選択した資料を一括処理</h2>
+                  <p className="muted">
+                    一時ファイルの有無に関わらず、OCR解析済みの資料について、証憑ファイルを添付せずに現在の読み取り結果だけで仕訳を送信します。マネーフォワード連携の不具合等で通常送信ができないまま残っている資料の救済用です。「全て選択」の対象は表示中のページ内の資料のみです。
+                  </p>
+                </div>
+              </div>
+              <ForceSendActionBar
+                customerId={customer.id}
+                submissionIds={submissions.map((item) => item.id)}
+              />
+            </section>
+
+            <section className="settings-panel" aria-label="送信履歴の絞り込み">
+              <div className="account-control-actions">
+                <a
+                  className={unsentOnly ? "primary-action" : "secondary-action"}
+                  href={buildListHref("unsent")}
+                >
+                  未送信のみ表示（{unsentCount ?? 0}）
+                </a>
+                <a
+                  className={mfFailedOnly ? "primary-action" : "secondary-action"}
+                  href={buildListHref("mf_failed")}
+                >
+                  MF送信エラーのみ表示（{mfFailedCount ?? 0}）
+                </a>
+                <a
+                  className={sentOnly ? "primary-action" : "secondary-action"}
+                  href={buildListHref("sent")}
+                >
+                  送信済みのみ表示（{sentCount ?? 0}）
+                </a>
+                <a
+                  className={
+                    currentFilter === "all" ? "primary-action" : "secondary-action"
+                  }
+                  href={buildListHref("all")}
+                >
+                  すべて表示（{allCount ?? 0}）
+                </a>
+                <a
+                  className="secondary-action"
+                  href={`/admin/customers/${customer.id}/trash`}
+                >
+                  ゴミ箱を見る（{trashCount ?? 0}）
+                </a>
+              </div>
+              <p className="muted">
+                1ページあたり{SUBMISSIONS_PER_PAGE}件ずつ表示します。初期表示は「未送信のみ」です。
+              </p>
+            </section>
+
+            {renderPagination()}
+
+            {submissions.length === 0 &&
+              (currentPage > 1 ? (
+                <div className="empty-state">
+                  <p>このページに表示できる資料はありません。</p>
+                  <a
+                    className="secondary-action compact-action"
+                    href={buildListHref(currentFilter)}
+                  >
+                    1ページ目へ戻る
+                  </a>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  {mfFailedOnly
+                    ? "MF送信エラーの送信履歴はありません。"
+                    : sentOnly
+                      ? "送信済みの送信履歴はありません。"
+                      : unsentOnly
+                        ? "未送信の送信履歴はありません。"
+                        : "送信履歴はまだありません。"}
+                </div>
+              ))}
+            {submissions.map((item) => {
+              const typeLabel = getFileTypeLabel(item.mime_type);
+              const tone = getThumbTone(item.mime_type);
+
+              return (
+                <article className="submission-row" key={item.id}>
+                  <SubmissionCheckbox submissionId={item.id} />
+                  <div className={`thumb ${tone}`}>
+                    {item.thumbnail_url ? (
+                      <img
+                        className="history-thumb-image"
+                        src={item.thumbnail_url}
+                        alt={`${item.file_name}のサムネイル`}
+                      />
+                    ) : typeLabel === "PDF" ? (
+                      <FileText size={28} />
+                    ) : (
+                      <ImageIcon size={28} />
+                    )}
+                    {!item.thumbnail_url && <span>{typeLabel}</span>}
+                  </div>
+                  <div className="submission-copy">
+                    <strong>{item.transaction_note}</strong>
+                    <small>{item.file_name}</small>
+                    <small>
+                      {formatSubmittedAt(item.submitted_at)} /{" "}
+                      {(item.file_size / 1024).toFixed(1)} KB
+                    </small>
+                    {item.drive_view_url && (
+                      <a
+                        className="inline-link"
+                        href={item.drive_view_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink size={14} />
+                        Driveで開く
+                      </a>
+                    )}
+                    <dl className="ocr-summary">
+                      <div>
+                        <dt>資料分類</dt>
+                        <dd>
+                          {getDocumentClassificationStatusLabel(
+                            item.document_classification_status,
+                            documentRules.length > 0,
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>判定</dt>
+                        <dd>{getDocumentKindLabel(item.document_kind)}</dd>
+                      </div>
+                      <div>
+                        <dt>一致ルール</dt>
+                        <dd>
+                          {item.document_rule_id
+                            ? documentRuleNameById.get(item.document_rule_id) ||
+                              item.document_rule_id
+                            : "なし"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>信頼度</dt>
+                        <dd>{formatConfidence(item.document_confidence)}</dd>
+                      </div>
+                      <div>
+                        <dt>Drive保存名</dt>
+                        <dd>{item.document_drive_file_name || "未保存"}</dd>
+                      </div>
+                      <div>
+                        <dt>状態</dt>
+                        <dd>{getOcrStatusLabel(item.ocr_status)}</dd>
+                      </div>
+                      <div>
+                        <dt>MF送信</dt>
+                        <dd>{getMfStatusLabel(item.mf_status)}</dd>
+                      </div>
+                      <div>
+                        <dt>MF送信日時</dt>
+                        <dd>
+                          {item.mf_sent_at
+                            ? formatSubmittedAt(item.mf_sent_at)
+                            : "未送信"}
+                        </dd>
+                      </div>
+                    </dl>
+                    <AdminOcrEditForm
+                      customerId={customer.id}
+                      submissionId={item.id}
+                      isSent={item.mf_status === "sent"}
+                      ocrDate={item.ocr_date}
+                      ocrAmount={item.ocr_amount}
+                      ocrStore={item.ocr_store}
+                      ocrSummary={item.ocr_summary}
+                      ocrPaymentMethod={item.ocr_payment_method}
+                      ocrIsCreditCard={item.ocr_is_credit_card}
+                      ocrUpdatedAt={item.ocr_updated_at}
+                    />
+                    {item.ocr_error && (
+                      <small className="warning-text">OCR: {item.ocr_error}</small>
+                    )}
+                    {item.document_error && (
+                      <small className="warning-text">
+                        Gemini分類: {item.document_error}
+                      </small>
+                    )}
+                    {item.mf_error && (
+                      <small className="warning-text">MF: {item.mf_error}</small>
+                    )}
+                    {item.mf_status !== "sent" && (
+                      <DeleteSubmissionButton
+                        action={hideSubmission}
+                        args={[customer.id, item.id]}
+                      />
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+
+            {renderPagination()}
+          </section>
+        </SubmissionSelectionProvider>
+      )}
     </main>
   );
 }
