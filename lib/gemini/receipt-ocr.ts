@@ -13,6 +13,10 @@ export type ReceiptOcrResult = {
   tax_breakdown: TaxBreakdown[] | null;
   has_multiple_tax_rates: boolean;
   needs_tax_rate_review: boolean;
+  // 1枚のレシート内で借方が複数の勘定科目に分かれる可能性があるか。
+  // 真の場合は科目を自動確定せず、顧客ごとに設定した仮計上科目へ計上する。
+  has_multiple_account_candidates: boolean;
+  account_review_reason: string | null;
 };
 
 export type ReceiptOcrOutcome =
@@ -152,6 +156,15 @@ function normalizeOcrResult(value: unknown): ReceiptOcrResult {
   const { taxBreakdown, hasMultipleTaxRates, needsTaxRateReview } =
     normalizeTaxBreakdown(record.tax_breakdown, normalizedAmount);
 
+  const hasMultipleAccountCandidates =
+    record.has_multiple_account_candidates === true;
+  const accountReviewReason =
+    hasMultipleAccountCandidates &&
+    typeof record.account_review_reason === "string" &&
+    record.account_review_reason.trim()
+      ? record.account_review_reason.trim().slice(0, 100)
+      : null;
+
   return {
     date: typeof record.date === "string" && record.date ? record.date : null,
     amount: normalizedAmount,
@@ -165,6 +178,8 @@ function normalizeOcrResult(value: unknown): ReceiptOcrResult {
     tax_breakdown: taxBreakdown,
     has_multiple_tax_rates: hasMultipleTaxRates,
     needs_tax_rate_review: needsTaxRateReview,
+    has_multiple_account_candidates: hasMultipleAccountCandidates,
+    account_review_reason: accountReviewReason,
   };
 }
 
@@ -172,10 +187,12 @@ export async function analyzeReceiptWithGemini({
   file,
   mimeType,
   transactionNote,
+  customerJournalPrompt = null,
 }: {
   file: File;
   mimeType: string;
   transactionNote: string;
+  customerJournalPrompt?: string | null;
 }): Promise<ReceiptOcrOutcome> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -228,10 +245,20 @@ export async function analyzeReceiptWithGemini({
                     "- subtotal は税込金額の整数（円）で返してください。",
                     "- 消費税率が全く読み取れない場合のみ tax_breakdown を null にしてください。",
                     "- amount（税込合計）= 各 subtotal の合計になるはずですが、読み取り精度の都合で1〜2円の差が生じてもそのまま返してください。",
+                    "",
+                    "【勘定科目が複数に分かれる可能性の判定】",
+                    "購入品目やユーザー入力から、1枚のレシートの借方が明らかに複数の勘定科目に分かれると判断できる場合のみ、has_multiple_account_candidates を true にし、account_review_reason にその理由を40文字以内の日本語で入れてください。",
+                    "- true にする例: スーパーで食材（仕入・福利厚生費など）と洗剤等の日用品（消耗品費）を同時購入している。ユーザー入力に「贈答用のフルーツと、仕入」「日用品と製造用の部品」のように用途の異なる複数の目的が書かれている。",
+                    "- false にする例: 用途が一貫している（コンビニで従業員用の飲料と菓子をまとめ買い＝福利厚生費のみ）。品目が複数あっても同じ科目に収まる。判断に迷う。",
+                    "- 保守的に判定してください。明らかに別科目だと言える場合以外は false にしてください。",
+                    "- 下記の顧客別の仕訳処理方針で科目の扱いが一律に定められている場合は、それに従い false にしてください。",
+                    customerJournalPrompt && customerJournalPrompt.trim()
+                      ? `顧客別の仕訳処理方針: ${customerJournalPrompt.trim()}`
+                      : "顧客別の仕訳処理方針: なし",
                     `ユーザー入力の取引内容: ${transactionNote}`,
-                    '返却形式（税率が全く読み取れない場合）: { "date": "YYYY-MM-DD", "amount": 1500, "store": "店舗名", "summary": "購入品目要約", "payment_method": "credit_card", "is_credit_card": true, "tax_breakdown": null }',
-                    '返却形式（単一8%の場合）: { "date": "YYYY-MM-DD", "amount": 472, "store": "店舗名", "summary": "購入品目要約", "payment_method": "cash", "is_credit_card": false, "tax_breakdown": [{ "rate": 8, "subtotal": 472 }] }',
-                    '返却形式（混在の場合）: { "date": "YYYY-MM-DD", "amount": 5460, "store": "店舗名", "summary": "購入品目要約", "payment_method": "cash", "is_credit_card": false, "tax_breakdown": [{ "rate": 8, "subtotal": 2160 }, { "rate": 10, "subtotal": 3300 }] }',
+                    '返却形式（税率が全く読み取れない場合）: { "date": "YYYY-MM-DD", "amount": 1500, "store": "店舗名", "summary": "購入品目要約", "payment_method": "credit_card", "is_credit_card": true, "tax_breakdown": null, "has_multiple_account_candidates": false, "account_review_reason": null }',
+                    '返却形式（単一8%の場合）: { "date": "YYYY-MM-DD", "amount": 472, "store": "店舗名", "summary": "購入品目要約", "payment_method": "cash", "is_credit_card": false, "tax_breakdown": [{ "rate": 8, "subtotal": 472 }], "has_multiple_account_candidates": false, "account_review_reason": null }',
+                    '返却形式（混在の場合）: { "date": "YYYY-MM-DD", "amount": 5460, "store": "店舗名", "summary": "購入品目要約", "payment_method": "cash", "is_credit_card": false, "tax_breakdown": [{ "rate": 8, "subtotal": 2160 }, { "rate": 10, "subtotal": 3300 }], "has_multiple_account_candidates": true, "account_review_reason": "食品と日用品が混在" }',
                   ].join("\n"),
                 },
                 {

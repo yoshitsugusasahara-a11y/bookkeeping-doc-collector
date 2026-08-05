@@ -78,6 +78,10 @@ export async function updateSubmissionOcr(
   const ocrTaxRate10Subtotal = parseTaxRateSubtotal(
     formData.get("ocrTaxRate10Subtotal"),
   );
+  const ocrHasMultipleAccountCandidates =
+    formData.get("ocrHasMultipleAccountCandidates") !== null;
+  const previousAccountReviewReason =
+    String(formData.get("ocrAccountReviewReason") || "").trim() || null;
   const ocrUpdatedAtBefore =
     String(formData.get("ocrUpdatedAt") || "").trim() || null;
 
@@ -134,6 +138,10 @@ export async function updateSubmissionOcr(
       ocr_has_multiple_tax_rates:
         ocrTaxRate8Subtotal !== null && ocrTaxRate10Subtotal !== null,
       ocr_needs_tax_rate_review: false,
+      ocr_has_multiple_account_candidates: ocrHasMultipleAccountCandidates,
+      ocr_account_review_reason: ocrHasMultipleAccountCandidates
+        ? previousAccountReviewReason ?? "手動で指定"
+        : null,
       ocr_updated_at: ocrUpdatedAtNow,
       mf_status: "not_sent",
       mf_error: null,

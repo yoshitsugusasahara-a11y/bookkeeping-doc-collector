@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getMoneyForwardAccounts } from "@/lib/moneyforward/client";
+import { resolveMoneyForwardAccessToken } from "@/lib/moneyforward/connection";
 import {
   forceSendJournalOnly,
   processSubmissionToMoneyForward,
@@ -30,6 +32,15 @@ export type RetentionSettingsState = {
   status: "idle" | "success" | "error";
   message: string;
 };
+
+export type SuspenseAccountOption = {
+  id: string;
+  name: string;
+};
+
+export type SuspenseAccountFetchResult =
+  | { status: "success"; accounts: SuspenseAccountOption[] }
+  | { status: "error"; message: string };
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
@@ -218,6 +229,106 @@ export async function updateCustomerJournalPrompt(
 
   revalidatePath(`/admin/customers/${customerId}`);
   return { status: "success", message: "仕訳生成指示を保存しました。" };
+}
+
+/**
+ * 仮計上科目の選択肢を、その顧客のMF勘定科目マスタから取得する。
+ * 設定画面を開くたびにMF APIを叩くとページ表示が遅く、トークン切れで
+ * 画面自体が壊れるため、ボタン押下時にだけ取得する。
+ */
+export async function fetchMfAccountsForSuspenseSetting(
+  customerId: string,
+): Promise<SuspenseAccountFetchResult> {
+  if (!customerId) {
+    return { status: "error", message: "顧客情報を取得できませんでした。" };
+  }
+
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  try {
+    const accessToken = await resolveMoneyForwardAccessToken({
+      supabase,
+      customerAccountId: customerId,
+    });
+
+    if (!accessToken) {
+      return {
+        status: "error",
+        message:
+          "MF連携が未完了のため科目一覧を取得できません。先にマネーフォワード連携を行ってください。",
+      };
+    }
+
+    const response = await getMoneyForwardAccounts(accessToken);
+    const accounts = (
+      Array.isArray(response.accounts) ? response.accounts : []
+    ) as Array<{ id?: unknown; name?: unknown }>;
+
+    const options = accounts
+      .filter(
+        (account): account is { id: string; name: string } =>
+          typeof account.id === "string" && typeof account.name === "string",
+      )
+      .map((account) => ({ id: account.id, name: account.name }));
+
+    if (options.length === 0) {
+      return {
+        status: "error",
+        message: "マネーフォワードから勘定科目を取得できませんでした。",
+      };
+    }
+
+    return { status: "success", accounts: options };
+  } catch (error) {
+    return {
+      status: "error",
+      message: `科目一覧の取得に失敗しました。${getErrorMessage(error)}`,
+    };
+  }
+}
+
+export async function updateCustomerSuspenseAccount(
+  customerId: string,
+  accountId: string,
+  accountName: string,
+): Promise<{ status: "success" | "error"; message: string }> {
+  if (!customerId) {
+    return { status: "error", message: "顧客情報を取得できませんでした。" };
+  }
+
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  const trimmedId = accountId.trim();
+  const trimmedName = accountName.trim();
+
+  const { error } = await supabase
+    .from("customer_accounts")
+    .update({
+      suspense_account_id: trimmedId || null,
+      suspense_account_name: trimmedId ? trimmedName || null : null,
+    })
+    .eq("id", customerId);
+
+  if (error) {
+    return {
+      status: "error",
+      message: `仮計上科目を保存できませんでした。${getErrorMessage(error)}`,
+    };
+  }
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  return {
+    status: "success",
+    message: trimmedId
+      ? `仮計上科目を「${trimmedName}」に設定しました。`
+      : "仮計上科目の設定を解除しました。",
+  };
 }
 
 export async function updateCustomerRetentionSettings(
@@ -476,6 +587,8 @@ export async function updateSubmissionOcrAsAdmin(
     ocrPaymentMethod: string;
     ocrTaxRate8Subtotal: string;
     ocrTaxRate10Subtotal: string;
+    ocrHasMultipleAccountCandidates: boolean;
+    ocrAccountReviewReason: string | null;
     ocrUpdatedAt: string | null;
   },
 ): Promise<OcrUpdateState> {
@@ -531,6 +644,11 @@ export async function updateSubmissionOcrAsAdmin(
       ocr_has_multiple_tax_rates:
         ocrTaxRate8Subtotal !== null && ocrTaxRate10Subtotal !== null,
       ocr_needs_tax_rate_review: false,
+      ocr_has_multiple_account_candidates:
+        values.ocrHasMultipleAccountCandidates,
+      ocr_account_review_reason: values.ocrHasMultipleAccountCandidates
+        ? values.ocrAccountReviewReason?.trim() || "手動で指定"
+        : null,
       ocr_updated_at: new Date().toISOString(),
       mf_status: "not_sent",
       mf_error: null,

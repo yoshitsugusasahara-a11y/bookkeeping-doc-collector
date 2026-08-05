@@ -48,6 +48,8 @@ export type Database = {
           irregular_drive_folder_id: string | null;
           irregular_drive_folder_name: string | null;
           journal_prompt: string | null;
+          suspense_account_id: string | null;
+          suspense_account_name: string | null;
           submission_retention_limit: number;
           approved_at: string | null;
           created_at: string;
@@ -66,6 +68,8 @@ export type Database = {
           irregular_drive_folder_id?: string | null;
           irregular_drive_folder_name?: string | null;
           journal_prompt?: string | null;
+          suspense_account_id?: string | null;
+          suspense_account_name?: string | null;
           submission_retention_limit?: number;
           approved_at?: string | null;
           created_at?: string;
@@ -84,6 +88,8 @@ export type Database = {
           irregular_drive_folder_id?: string | null;
           irregular_drive_folder_name?: string | null;
           journal_prompt?: string | null;
+          suspense_account_id?: string | null;
+          suspense_account_name?: string | null;
           submission_retention_limit?: number;
           approved_at?: string | null;
           created_at?: string;
@@ -147,6 +153,8 @@ export type Database = {
           ocr_tax_rate_10_subtotal: number | null;
           ocr_has_multiple_tax_rates: boolean;
           ocr_needs_tax_rate_review: boolean;
+          ocr_has_multiple_account_candidates: boolean;
+          ocr_account_review_reason: string | null;
           ocr_updated_at: string | null;
           mf_status: MfSubmissionStatus;
           mf_error: string | null;
@@ -190,6 +198,8 @@ export type Database = {
           ocr_tax_rate_10_subtotal?: number | null;
           ocr_has_multiple_tax_rates?: boolean;
           ocr_needs_tax_rate_review?: boolean;
+          ocr_has_multiple_account_candidates?: boolean;
+          ocr_account_review_reason?: string | null;
           ocr_updated_at?: string | null;
           mf_status?: MfSubmissionStatus;
           mf_error?: string | null;
@@ -233,6 +243,8 @@ export type Database = {
           ocr_tax_rate_10_subtotal?: number | null;
           ocr_has_multiple_tax_rates?: boolean;
           ocr_needs_tax_rate_review?: boolean;
+          ocr_has_multiple_account_candidates?: boolean;
+          ocr_account_review_reason?: string | null;
           ocr_updated_at?: string | null;
           mf_status?: MfSubmissionStatus;
           mf_error?: string | null;

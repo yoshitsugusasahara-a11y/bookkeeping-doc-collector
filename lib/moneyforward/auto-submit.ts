@@ -7,10 +7,10 @@ import {
   getExtensionFromMimeType,
   getMoneyForwardAccounts,
   getMoneyForwardTaxes,
-  getValidMoneyForwardAccessToken,
   postMoneyForwardJournal,
   postMoneyForwardVouchers,
 } from "./client";
+import { resolveMoneyForwardAccessToken } from "./connection";
 
 function fileToBase64(buffer: ArrayBuffer) {
   return Buffer.from(buffer).toString("base64");
@@ -58,6 +58,8 @@ export async function submitReceiptToMoneyForward({
   transactionNote,
   ocr,
   customerJournalPrompt = null,
+  suspenseAccountId = null,
+  suspenseAccountName = null,
 }: {
   supabase: SupabaseClient<Database>;
   customerAccountId: string;
@@ -68,14 +70,15 @@ export async function submitReceiptToMoneyForward({
   transactionNote: string;
   ocr: ReceiptOcrResult;
   customerJournalPrompt?: string | null;
+  suspenseAccountId?: string | null;
+  suspenseAccountName?: string | null;
 }) {
-  const { data: connection } = await supabase
-    .from("mf_connections")
-    .select("access_token, refresh_token, token_type, scope, expires_at")
-    .eq("customer_account_id", customerAccountId)
-    .maybeSingle();
+  const accessToken = await resolveMoneyForwardAccessToken({
+    supabase,
+    customerAccountId,
+  });
 
-  if (!connection) {
+  if (!accessToken) {
     await supabase
       .from("submissions")
       .update({
@@ -86,60 +89,34 @@ export async function submitReceiptToMoneyForward({
     return;
   }
 
-  let activeConnection = connection;
-  let refreshed;
-
-  try {
-    refreshed = await getValidMoneyForwardAccessToken(activeConnection);
-  } catch (refreshError) {
-    // 他の処理（Cron・手動実行など）が直前に同じrefresh_tokenを使って
-    // ローテーション済みの場合、DBには新しいトークンが保存されている。
-    // 再読込して自分の持っていたトークンと違えば、そちらでやり直す。
-    const { data: latestConnection } = await supabase
-      .from("mf_connections")
-      .select("access_token, refresh_token, token_type, scope, expires_at")
-      .eq("customer_account_id", customerAccountId)
-      .maybeSingle();
-
-    if (
-      !latestConnection ||
-      latestConnection.refresh_token === activeConnection.refresh_token
-    ) {
-      throw refreshError;
-    }
-
-    activeConnection = latestConnection;
-    refreshed = await getValidMoneyForwardAccessToken(activeConnection);
-  }
-
-  const accessToken = refreshed?.access_token ?? activeConnection.access_token;
-
-  if (refreshed) {
-    const { data: savedRows, error: saveError } = await supabase
-      .from("mf_connections")
-      .update({
-        access_token: refreshed.access_token,
-        refresh_token: refreshed.refresh_token,
-        token_type: refreshed.token_type,
-        scope: refreshed.scope,
-        expires_at: refreshed.expires_at,
-      })
-      .eq("customer_account_id", customerAccountId)
-      .select("customer_account_id");
-
-    if (saveError || !savedRows || savedRows.length === 0) {
-      // 保存に失敗したまま処理を続けると、DBに残った古いrefresh_tokenが
-      // 次回以降 invalid_grant で失敗し続けるため、ここで明示的に失敗させる。
-      throw new Error(
-        `MFトークンの保存に失敗しました。${saveError?.message ?? "更新対象の連携情報が見つかりませんでした。"}`,
-      );
-    }
-  }
-
   const accountsResponse = await getMoneyForwardAccounts(accessToken);
   const accounts = Array.isArray(accountsResponse.accounts)
     ? accountsResponse.accounts
     : [];
+
+  // 借方が複数科目に分かれる可能性があるレシートは、科目を自動確定せず
+  // 顧客ごとに設定した仮計上科目へ計上する。設定がない、または設定済みの科目が
+  // MF側で削除されている場合は、誤った科目で計上せずここで送信を止める。
+  let resolvedSuspenseAccountId: string | null = null;
+  if (ocr.has_multiple_account_candidates) {
+    if (!suspenseAccountId) {
+      throw new Error(
+        "複数の勘定科目に分かれる可能性があるレシートですが、仮計上科目が未設定のため送信できません。管理者にご連絡ください。",
+      );
+    }
+
+    const suspenseAccountExists = (
+      accounts as Array<{ id?: unknown }>
+    ).some((account) => account?.id === suspenseAccountId);
+
+    if (!suspenseAccountExists) {
+      throw new Error(
+        `複数の勘定科目に分かれる可能性があるレシートですが、仮計上科目「${suspenseAccountName ?? "未設定"}」がマネーフォワード上に見つかりません。管理者にご連絡ください。`,
+      );
+    }
+
+    resolvedSuspenseAccountId = suspenseAccountId;
+  }
 
   // 混在レシートに限らず、単一税率が8%のみと判明しているレシートでも
   // 軽減税率区分への差し替えが必要なため、tax_breakdown に8%が含まれる場合は取得する。
@@ -175,6 +152,7 @@ export async function submitReceiptToMoneyForward({
     customerJournalPrompt,
     accounts: accounts as never[],
     taxes,
+    suspenseAccountId: resolvedSuspenseAccountId,
   });
   const journalResponse = await postMoneyForwardJournal({
     accessToken,

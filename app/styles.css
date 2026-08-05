@@ -431,6 +431,26 @@ select:disabled {
   color: var(--muted);
 }
 
+/* チェックボックスは上の input 共通指定（min-height:44px 等）を打ち消す */
+.checkbox-line {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.checkbox-line input[type="checkbox"] {
+  flex: none;
+  height: 20px;
+  margin: 0;
+  min-height: 0;
+  padding: 0;
+  width: 20px;
+}
+
+.checkbox-line span {
+  font-weight: 400;
+}
+
 textarea {
   min-height: 150px;
   padding: 14px;

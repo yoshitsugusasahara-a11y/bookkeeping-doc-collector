@@ -23,6 +23,8 @@ export function OcrEditForm({
   ocrIsCreditCard,
   ocrTaxRate8Subtotal,
   ocrTaxRate10Subtotal,
+  ocrHasMultipleAccountCandidates,
+  ocrAccountReviewReason,
   ocrUpdatedAt,
 }: {
   clientSlug: string;
@@ -36,6 +38,8 @@ export function OcrEditForm({
   ocrIsCreditCard?: boolean | null;
   ocrTaxRate8Subtotal?: number | null;
   ocrTaxRate10Subtotal?: number | null;
+  ocrHasMultipleAccountCandidates?: boolean | null;
+  ocrAccountReviewReason?: string | null;
   ocrUpdatedAt?: string | null;
 }) {
   const [isSaving, setIsSaving] = useState(false);
@@ -171,6 +175,29 @@ export function OcrEditForm({
       </label>
       <small className="muted">
         レシートに軽減税率(8%)・標準税率(10%)の内訳が印字されている場合に入力してください。両方入力すると2件の仕訳に分けて登録されます。片方のみ、または空欄のままでも送信できます。
+      </small>
+      <input
+        type="hidden"
+        name="ocrAccountReviewReason"
+        value={ocrAccountReviewReason || ""}
+      />
+      <label className="field">
+        <span>複数の勘定科目に分かれる可能性</span>
+        <span className="checkbox-line">
+          <input
+            type="checkbox"
+            name="ocrHasMultipleAccountCandidates"
+            defaultChecked={ocrHasMultipleAccountCandidates ?? false}
+            disabled={disabled}
+          />
+          <span>
+            この資料は複数の勘定科目に分かれる可能性がある
+            {ocrAccountReviewReason ? `（${ocrAccountReviewReason}）` : ""}
+          </span>
+        </span>
+      </label>
+      <small className="muted">
+        チェックすると、勘定科目を確定させず仮の科目で計上し、「確認」タグを付けて送信します。1つの科目で処理してよい場合はチェックを外してください。
       </small>
       <div className="action-row">
         <button

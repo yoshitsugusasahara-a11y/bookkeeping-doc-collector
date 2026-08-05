@@ -43,6 +43,8 @@ export function AdminOcrEditForm({
   ocrIsCreditCard,
   ocrTaxRate8Subtotal,
   ocrTaxRate10Subtotal,
+  ocrHasMultipleAccountCandidates,
+  ocrAccountReviewReason,
   ocrUpdatedAt,
 }: {
   customerId: string;
@@ -56,6 +58,8 @@ export function AdminOcrEditForm({
   ocrIsCreditCard?: boolean | null;
   ocrTaxRate8Subtotal?: number | null;
   ocrTaxRate10Subtotal?: number | null;
+  ocrHasMultipleAccountCandidates?: boolean | null;
+  ocrAccountReviewReason?: string | null;
   ocrUpdatedAt?: string | null;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -83,6 +87,9 @@ export function AdminOcrEditForm({
         ocrPaymentMethod: String(formData.get("ocrPaymentMethod") || ""),
         ocrTaxRate8Subtotal: String(formData.get("ocrTaxRate8Subtotal") || ""),
         ocrTaxRate10Subtotal: String(formData.get("ocrTaxRate10Subtotal") || ""),
+        ocrHasMultipleAccountCandidates:
+          formData.get("ocrHasMultipleAccountCandidates") !== null,
+        ocrAccountReviewReason: ocrAccountReviewReason || null,
         ocrUpdatedAt: ocrUpdatedAt || null,
       });
 
@@ -128,6 +135,14 @@ export function AdminOcrEditForm({
         <div>
           <dt>消費税区分</dt>
           <dd>{formatTaxBreakdown(ocrTaxRate8Subtotal, ocrTaxRate10Subtotal)}</dd>
+        </div>
+        <div>
+          <dt>科目判定</dt>
+          <dd className={ocrHasMultipleAccountCandidates ? "warning-text" : undefined}>
+            {ocrHasMultipleAccountCandidates
+              ? `複数科目の可能性あり${ocrAccountReviewReason ? `（${ocrAccountReviewReason}）` : ""}`
+              : "単一科目"}
+          </dd>
         </div>
         <div>
           <dt>支払方法</dt>
@@ -222,6 +237,24 @@ export function AdminOcrEditForm({
       </label>
       <small className="muted">
         レシートに軽減税率(8%)・標準税率(10%)の内訳が印字されている場合に入力してください。両方入力すると2件の仕訳に分けて登録されます。
+      </small>
+      <label className="field">
+        <span>複数の勘定科目に分かれる可能性</span>
+        <span className="checkbox-line">
+          <input
+            type="checkbox"
+            name="ocrHasMultipleAccountCandidates"
+            defaultChecked={ocrHasMultipleAccountCandidates ?? false}
+            disabled={isSaving}
+          />
+          <span>
+            複数科目に分かれる可能性がある
+            {ocrAccountReviewReason ? `（${ocrAccountReviewReason}）` : ""}
+          </span>
+        </span>
+      </label>
+      <small className="muted">
+        チェックすると、勘定科目を確定させず顧客設定の仮計上科目で計上し、「確認」タグを付けて送信します。
       </small>
       <div className="action-row">
         <button

@@ -462,6 +462,7 @@ export async function generateMfJournalWithGemini({
   customerJournalPrompt = null,
   accounts,
   taxes = [],
+  suspenseAccountId = null,
 }: {
   ocr: ReceiptOcrResult;
   transactionNote: string;
@@ -472,6 +473,7 @@ export async function generateMfJournalWithGemini({
   customerJournalPrompt?: string | null;
   accounts: MfAccountOption[];
   taxes?: MfTaxOption[];
+  suspenseAccountId?: string | null;
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -553,11 +555,27 @@ export async function generateMfJournalWithGemini({
         ocr.needs_tax_rate_review ||
         (ocr.has_multiple_tax_rates && !hasValidTaxRateHints);
 
+      // 仮計上科目が使えるときだけ科目差し替えを行う。
+      // auto-submit 側で未設定・不存在は送信前に弾いているため、ここに来る時点で
+      // null なら差し替えは行わない（通常の科目のまま）。
+      const resolvedSuspenseAccountId = ocr.has_multiple_account_candidates
+        ? suspenseAccountId
+        : null;
+      const useSuspenseAccount = resolvedSuspenseAccountId !== null;
+
       const requiredTags =
-        needsDateConfirmation || needsTaxRateReview ? ["確認"] : [];
+        needsDateConfirmation || needsTaxRateReview || useSuspenseAccount
+          ? ["確認"]
+          : [];
 
       const taxReviewNote = needsTaxRateReview
         ? "（税率が読み取れなかったため仕訳を確認してください）"
+        : "";
+
+      const accountReviewNote = useSuspenseAccount
+        ? `（複数の勘定科目に分かれる可能性があるため仮計上しています。科目と税区分を確認してください${
+            ocr.account_review_reason ? `: ${ocr.account_review_reason}` : ""
+          }）`
         : "";
 
       // 混在レシートでなくても、単一税率が8%だと確認できているレシート
@@ -567,10 +585,14 @@ export async function generateMfJournalWithGemini({
           ? ocr.tax_breakdown[0].rate
           : null;
 
-      const memoBase = submissionTimestampLabel.slice(0, 200);
-      const memo = taxReviewNote
-        ? `${memoBase.slice(0, 200 - taxReviewNote.length)}${taxReviewNote}`.replace(/\s+/g, " ").slice(0, 200)
-        : memoBase;
+      // 注記は末尾が切れると意味が失われるため、注記を優先して残し
+      // 送信日時ラベル側を縮める。
+      const memoNotes = `${taxReviewNote}${accountReviewNote}`;
+      const memo = memoNotes
+        ? `${submissionTimestampLabel.slice(0, Math.max(0, 200 - memoNotes.length))}${memoNotes}`
+            .replace(/\s+/g, " ")
+            .slice(0, 200)
+        : submissionTimestampLabel.slice(0, 200);
 
       return {
         ...journal,
@@ -582,7 +604,7 @@ export async function generateMfJournalWithGemini({
           requiredTags,
         }),
         branches: journal.branches.map(({ tax_rate_hint, ...branch }) => {
-          const finalRemark = hasCustomerPrompt
+          const baseRemark = hasCustomerPrompt
             ? ensureVoucherFileNameInRemark({
                 remark: branch.remark,
                 fallbackRemark: remark,
@@ -590,17 +612,41 @@ export async function generateMfJournalWithGemini({
               })
             : remark;
 
+          // 複数税率で分割したブランチは、どちらの税率分かが摘要から分かるようにする。
+          // 特に仮計上時は税区分が両ブランチとも仮計上科目の既定値になるため、
+          // この表記が税率を判別する唯一の手掛かりになる。
+          const rateLabel =
+            ocr.has_multiple_tax_rates && tax_rate_hint
+              ? `(${tax_rate_hint}%対象)`
+              : "";
+          const finalRemark = (
+            rateLabel && !baseRemark.includes(rateLabel)
+              ? `${baseRemark} ${rateLabel}`
+              : baseRemark
+          )
+            .replace(/\s+/g, " ")
+            .slice(0, 200);
+
+          // 借方が複数科目に分かれる可能性がある場合は科目を確定させず仮計上科目へ振り替える。
+          // このとき税区分は仮計上科目のマスタ既定値をそのまま使い、軽減税率への
+          // 差し替えは行わない（科目とあわせて後から人が確定させる運用）。
+          const debitorAccountId =
+            resolvedSuspenseAccountId ?? branch.debitor.account_id;
+          const debitorSubAccountId = useSuspenseAccount
+            ? null
+            : branch.debitor.sub_account_id;
+
           // まずマスタのデフォルト税区分ID（通常は標準10%側）を取得し、
           // 軽減税率ブランチについては同じ系統の8%区分が見つかればそちらに差し替える。
           // 見つからない場合（免税事業者などマスタに軽減税率区分が存在しない）はデフォルトのまま。
           const baseDebitorTaxId = resolveMasterTaxId({
             lookup: taxLookup,
-            accountId: branch.debitor.account_id,
-            subAccountId: branch.debitor.sub_account_id,
+            accountId: debitorAccountId,
+            subAccountId: debitorSubAccountId,
           });
           const effectiveRateHint = tax_rate_hint ?? singleReceiptRateHint;
           const debitorTaxId =
-            effectiveRateHint === 8
+            !useSuspenseAccount && effectiveRateHint === 8
               ? resolveReducedRateTaxId(baseDebitorTaxId) ?? baseDebitorTaxId
               : baseDebitorTaxId;
 
@@ -609,6 +655,8 @@ export async function generateMfJournalWithGemini({
             remark: finalRemark,
             debitor: {
               ...branch.debitor,
+              account_id: debitorAccountId,
+              sub_account_id: debitorSubAccountId,
               tax_id: debitorTaxId,
             },
             creditor: {

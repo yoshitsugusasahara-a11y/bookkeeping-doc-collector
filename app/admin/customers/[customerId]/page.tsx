@@ -20,6 +20,7 @@ import { DisconnectMfButton } from "./disconnect-mf-button";
 import { DocumentRuleActions } from "./document-rule-actions";
 import { DocumentRuleForm } from "./document-rule-form";
 import { DriveSettingsForm } from "./drive-settings-form";
+import { SuspenseAccountForm } from "./suspense-account-form";
 import { ForceSendActionBar } from "./force-send-action-bar";
 import { JournalPromptForm } from "./journal-prompt-form";
 import { MfProcessForm } from "./mf-process-form";
@@ -162,7 +163,7 @@ export default async function AdminCustomerDetailPage({
   let submissionQuery = supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_updated_at, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_account_candidates, ocr_account_review_reason, ocr_updated_at, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", customerId)
     .is("hidden_at", null);
@@ -191,7 +192,7 @@ export default async function AdminCustomerDetailPage({
     supabase
       .from("customer_accounts")
       .select(
-        "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, irregular_drive_folder_id, irregular_drive_folder_name, journal_prompt, submission_retention_limit, created_at",
+        "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, irregular_drive_folder_id, irregular_drive_folder_name, journal_prompt, suspense_account_id, suspense_account_name, submission_retention_limit, created_at",
       )
       .eq("id", customerId)
       .maybeSingle(),
@@ -541,6 +542,22 @@ export default async function AdminCustomerDetailPage({
             />
           </section>
 
+          <section className="settings-panel" aria-label="仮計上科目">
+            <div>
+              <p className="eyebrow">Suspense Account</p>
+              <h2>仮計上科目</h2>
+              <p className="muted">
+                1枚のレシートで借方が複数の勘定科目に分かれる可能性がある場合に、科目を確定させず仮計上するための科目です（マネーフォワードの初期設定では「未確定勘定」）。未設定の場合、該当するレシートはマネーフォワードへ送信されません。
+              </p>
+            </div>
+            <SuspenseAccountForm
+              customerId={customer.id}
+              suspenseAccountId={customer.suspense_account_id}
+              suspenseAccountName={customer.suspense_account_name}
+              isMfConnected={Boolean(mfConnection)}
+            />
+          </section>
+
           <section className="settings-panel" aria-label="資料保存上限">
             <div>
               <p className="eyebrow">Storage Limit</p>
@@ -805,6 +822,10 @@ export default async function AdminCustomerDetailPage({
                       ocrIsCreditCard={item.ocr_is_credit_card}
                       ocrTaxRate8Subtotal={item.ocr_tax_rate_8_subtotal}
                       ocrTaxRate10Subtotal={item.ocr_tax_rate_10_subtotal}
+                      ocrHasMultipleAccountCandidates={
+                        item.ocr_has_multiple_account_candidates
+                      }
+                      ocrAccountReviewReason={item.ocr_account_review_reason}
                       ocrUpdatedAt={item.ocr_updated_at}
                     />
                     {item.ocr_error && (

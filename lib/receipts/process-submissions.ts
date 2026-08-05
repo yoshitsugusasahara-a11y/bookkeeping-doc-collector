@@ -28,7 +28,7 @@ import type { Database } from "@/lib/supabase/types";
 
 const receiptUploadBucket = "receipt_uploads";
 const submissionProcessingColumns =
-  "id, customer_account_id, transaction_note, file_name, mime_type, source_storage_path, submitted_at, drive_file_id, drive_view_url, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_tax_rates, ocr_needs_tax_rate_review, mf_status";
+  "id, customer_account_id, transaction_note, file_name, mime_type, source_storage_path, submitted_at, drive_file_id, drive_view_url, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_tax_rates, ocr_needs_tax_rate_review, ocr_has_multiple_account_candidates, ocr_account_review_reason, mf_status";
 
 type SubmissionRow = {
   id: string;
@@ -57,6 +57,8 @@ type SubmissionRow = {
   ocr_tax_rate_10_subtotal?: number | null;
   ocr_has_multiple_tax_rates?: boolean;
   ocr_needs_tax_rate_review?: boolean;
+  ocr_has_multiple_account_candidates?: boolean;
+  ocr_account_review_reason?: string | null;
   mf_status: string;
 };
 
@@ -66,6 +68,8 @@ type CustomerDriveSettings = {
   error_drive_folder_id: string | null;
   irregular_drive_folder_id: string | null;
   journal_prompt: string | null;
+  suspense_account_id: string | null;
+  suspense_account_name: string | null;
 };
 
 type DocumentRule = DocumentRuleForClassification & {
@@ -98,6 +102,9 @@ function getCompletedOcr(submission: SubmissionRow): ReceiptOcrResult | null {
     tax_breakdown: taxBreakdown.length > 0 ? taxBreakdown : null,
     has_multiple_tax_rates: submission.ocr_has_multiple_tax_rates ?? false,
     needs_tax_rate_review: submission.ocr_needs_tax_rate_review ?? false,
+    has_multiple_account_candidates:
+      submission.ocr_has_multiple_account_candidates ?? false,
+    account_review_reason: submission.ocr_account_review_reason ?? null,
   };
 }
 
@@ -210,7 +217,7 @@ async function getCustomerDriveSettings({
   const { data: customer, error } = await supabase
     .from("customer_accounts")
     .select(
-      "id, drive_folder_id, error_drive_folder_id, irregular_drive_folder_id, journal_prompt",
+      "id, drive_folder_id, error_drive_folder_id, irregular_drive_folder_id, journal_prompt, suspense_account_id, suspense_account_name",
     )
     .eq("id", customerId)
     .maybeSingle();
@@ -407,10 +414,12 @@ async function runOcrForSubmission({
   supabase,
   submission,
   file,
+  customerJournalPrompt = null,
 }: {
   supabase: SupabaseClient<Database>;
   submission: SubmissionRow;
   file: File;
+  customerJournalPrompt?: string | null;
 }) {
   const existingOcr = getCompletedOcr(submission);
   if (existingOcr) return existingOcr;
@@ -419,6 +428,7 @@ async function runOcrForSubmission({
     file,
     mimeType: submission.mime_type,
     transactionNote: submission.transaction_note,
+    customerJournalPrompt,
   });
 
   if (ocr.status !== "completed") {
@@ -451,6 +461,9 @@ async function runOcrForSubmission({
       ocr_tax_rate_10_subtotal: ocr.result.tax_breakdown?.find((b) => b.rate === 10)?.subtotal ?? null,
       ocr_has_multiple_tax_rates: ocr.result.has_multiple_tax_rates,
       ocr_needs_tax_rate_review: ocr.result.needs_tax_rate_review,
+      ocr_has_multiple_account_candidates:
+        ocr.result.has_multiple_account_candidates,
+      ocr_account_review_reason: ocr.result.account_review_reason,
       ocr_updated_at: new Date().toISOString(),
     })
     .eq("id", submission.id);
@@ -661,7 +674,12 @@ export async function processCustomerPendingOcr({
         processed += 1;
         continue;
       }
-      await runOcrForSubmission({ supabase, submission, file });
+      await runOcrForSubmission({
+        supabase,
+        submission,
+        file,
+        customerJournalPrompt: customer.journal_prompt,
+      });
       processed += 1;
     } catch (error) {
       console.error("Failed to process OCR", error);
@@ -720,6 +738,8 @@ export async function forceSendJournalOnly({
       transactionNote: submission.transaction_note,
       ocr,
       customerJournalPrompt: customer.journal_prompt,
+      suspenseAccountId: customer.suspense_account_id,
+      suspenseAccountName: customer.suspense_account_name,
     });
 
     await logActivity({
@@ -790,7 +810,12 @@ export async function processSubmissionToMoneyForward({
 
   try {
     const file = await downloadStoredFile({ supabase, submission });
-    const ocr = await runOcrForSubmission({ supabase, submission, file });
+    const ocr = await runOcrForSubmission({
+      supabase,
+      submission,
+      file,
+      customerJournalPrompt: customer.journal_prompt,
+    });
     const hadExistingDriveFile = Boolean(submission.drive_file_id);
 
     driveFileId = await uploadToDriveIfNeeded({
@@ -811,6 +836,8 @@ export async function processSubmissionToMoneyForward({
       transactionNote: submission.transaction_note,
       ocr,
       customerJournalPrompt: customer.journal_prompt,
+      suspenseAccountId: customer.suspense_account_id,
+      suspenseAccountName: customer.suspense_account_name,
     });
 
     // ドライブへのアップロードは一度成功すると再アップロードされないため、
