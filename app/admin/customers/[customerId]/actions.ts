@@ -6,6 +6,10 @@ import { getMoneyForwardAccounts } from "@/lib/moneyforward/client";
 import { resolveMoneyForwardAccessToken } from "@/lib/moneyforward/connection";
 import { buildClearedMfJournalPreviewFields } from "@/lib/moneyforward/journal-preview";
 import {
+  ADMIN_SEND_BLOCKED_MESSAGE,
+  canAdminSend,
+} from "@/lib/receipts/send-mode";
+import {
   forceSendJournalOnly,
   processCustomerPendingJournalPreviews,
   processSubmissionToMoneyForward,
@@ -479,13 +483,26 @@ export async function listPendingMfSubmissions(
     return { status: "error", message: "管理者権限を確認できませんでした。" };
   }
 
-  const { data, error } = await supabase
+  const { data: customer } = await supabase
+    .from("customer_accounts")
+    .select("skip_approval")
+    .eq("id", customerId)
+    .maybeSingle();
+
+  let query = supabase
     .from("submissions")
     .select("id, file_name")
     .eq("customer_account_id", customerId)
     .neq("mf_status", "sent")
     .not("source_storage_path", "is", null)
-    .is("hidden_at", null)
+    .is("hidden_at", null);
+
+  // 承認省略に同意していない顧客は、承認済みの資料だけが管理者の送信対象。
+  if (!customer?.skip_approval) {
+    query = query.not("approved_at", "is", null);
+  }
+
+  const { data, error } = await query
     .order("submitted_at", { ascending: true })
     .limit(100);
 
@@ -505,6 +522,44 @@ export async function listPendingMfSubmissions(
   };
 }
 
+/**
+ * 管理者が代理送信してよい資料かを確認する。
+ * 一覧の絞り込みだけに頼ると、古い画面から直接呼ばれた場合に素通りするため、
+ * 実際に送信する各アクションでも都度確認する。
+ */
+async function assertAdminCanSend({
+  supabase,
+  customerId,
+  submissionId,
+}: {
+  supabase: NonNullable<Awaited<ReturnType<typeof ensureAdmin>>>;
+  customerId: string;
+  submissionId: string;
+}): Promise<string | null> {
+  const [{ data: customer }, { data: submission }] = await Promise.all([
+    supabase
+      .from("customer_accounts")
+      .select("skip_approval")
+      .eq("id", customerId)
+      .maybeSingle(),
+    supabase
+      .from("submissions")
+      .select("approved_at")
+      .eq("id", submissionId)
+      .eq("customer_account_id", customerId)
+      .maybeSingle(),
+  ]);
+
+  if (!submission) return "対象の資料が見つかりませんでした。";
+
+  return canAdminSend({
+    skipApproval: customer?.skip_approval,
+    approvedAt: submission.approved_at,
+  })
+    ? null
+    : ADMIN_SEND_BLOCKED_MESSAGE;
+}
+
 export async function processSingleMfSubmission(
   customerId: string,
   submissionId: string,
@@ -516,6 +571,15 @@ export async function processSingleMfSubmission(
   const supabase = await ensureAdmin();
   if (!supabase) {
     return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  const blockedMessage = await assertAdminCanSend({
+    supabase,
+    customerId,
+    submissionId,
+  });
+  if (blockedMessage) {
+    return { status: "error", message: blockedMessage };
   }
 
   try {
@@ -542,6 +606,15 @@ export async function forceSendJournalOnlyAsAdmin(
   const supabase = await ensureAdmin();
   if (!supabase) {
     return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  const blockedMessage = await assertAdminCanSend({
+    supabase,
+    customerId,
+    submissionId,
+  });
+  if (blockedMessage) {
+    return { status: "error", message: blockedMessage };
   }
 
   try {

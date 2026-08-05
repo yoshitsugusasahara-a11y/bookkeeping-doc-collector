@@ -322,6 +322,28 @@ export async function setSubmissionApproval(
   }
 
   revalidatePath(`/client/${clientSlug}/submissions`);
+
+  // 承認された資料はCronを待たずにその場で送信を試みる。Cronは1日1回のため、
+  // 待つと承認から反映まで最大1日空き、都度送信より体感が悪くなる。
+  // 失敗しても承認は残り、次回のCronで再試行される。
+  const approvedIds = approved ? (data ?? []).map((row) => row.id) : [];
+  if (approvedIds.length > 0) {
+    after(async () => {
+      for (const submissionId of approvedIds) {
+        try {
+          await processSubmissionToMoneyForward({
+            supabase,
+            customerId: account.id,
+            submissionId,
+            source: "client_manual",
+          });
+        } catch (sendError) {
+          console.error("Failed to send after approval", sendError);
+        }
+      }
+    });
+  }
+
   return { status: "success", count: data?.length ?? 0 };
 }
 

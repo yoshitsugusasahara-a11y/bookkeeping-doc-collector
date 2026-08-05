@@ -14,6 +14,7 @@ import { DeleteSubmissionButton } from "@/components/delete-submission-button";
 import { hideSubmission } from "./actions";
 import { JournalPreviewTable } from "@/components/journal-preview-table";
 import type { MfJournalPreview } from "@/lib/moneyforward/journal-preview";
+import { canAdminSend } from "@/lib/receipts/send-mode";
 import { deleteCustomerAccount } from "../actions";
 import { CustomerAccountActionButton } from "../customer-account-action-button";
 import { CustomerAccountToggleButton } from "../customer-account-toggle-button";
@@ -166,7 +167,7 @@ export default async function AdminCustomerDetailPage({
   let submissionQuery = supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_account_candidates, ocr_account_review_reason, ocr_updated_at, mf_journal_preview, mf_journal_preview_status, mf_journal_preview_error, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_account_candidates, ocr_account_review_reason, ocr_updated_at, mf_journal_preview, mf_journal_preview_status, mf_journal_preview_error, approved_at, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", customerId)
     .is("hidden_at", null);
@@ -293,6 +294,17 @@ export default async function AdminCustomerDetailPage({
   const submissions = submissionResult.data ?? [];
   const mfConnection = mfConnectionResult.data;
   const documentRules = documentRuleResult.data ?? [];
+
+  // 承認の仕組みが管理画面から素通りされないよう、一括操作の選択対象も
+  // 顧客の意思が確認できる資料に限定する。
+  const adminSendableSubmissionIds = submissions
+    .filter((item) =>
+      canAdminSend({
+        skipApproval: customer.skip_approval,
+        approvedAt: item.approved_at,
+      }),
+    )
+    .map((item) => item.id);
 
   const filteredCount =
     (mfFailedOnly
@@ -670,11 +682,14 @@ export default async function AdminCustomerDetailPage({
                   <p className="muted">
                     一時ファイルの有無に関わらず、OCR解析済みの資料について、証憑ファイルを添付せずに現在の読み取り結果だけで仕訳を送信します。マネーフォワード連携の不具合等で通常送信ができないまま残っている資料の救済用です。「全て選択」の対象は表示中のページ内の資料のみです。
                   </p>
+                  <p className="muted">
+                    管理者から送信できるのは、顧客が承認した資料、または承認の省略に同意している顧客の資料に限られます。未承認の資料は選択対象に表示されません。
+                  </p>
                 </div>
               </div>
               <ForceSendActionBar
                 customerId={customer.id}
-                submissionIds={submissions.map((item) => item.id)}
+                submissionIds={adminSendableSubmissionIds}
               />
             </section>
 

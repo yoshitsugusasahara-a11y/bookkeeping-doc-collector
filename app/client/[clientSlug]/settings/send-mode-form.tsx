@@ -72,7 +72,7 @@ export function SendModeForm({
         disabled={isSaving}
         onChange={handleAutoSendChange}
         label="自動送信"
-        description="オフの場合、仕訳は自動では送信されません。履歴画面で内容をご確認のうえ、資料ごとに送信してください。"
+        description="オンの場合、履歴画面で「承認する」を押した仕訳が自動でマネーフォワードへ送信されます。オフの場合は、資料ごとに「MF送信」を押して送信してください。いずれの場合も、内容のご確認は必要です。"
       />
 
       {autoSendEnabled && (
