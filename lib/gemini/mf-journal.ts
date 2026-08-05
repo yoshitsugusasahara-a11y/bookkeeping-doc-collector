@@ -37,13 +37,53 @@ type MfAccountOption = {
   }>;
 };
 
-type MfTaxOption = {
-  id: string;
-  name?: string;
-  abbreviation?: string;
-  tax_rate?: number;
-  available?: boolean;
+type AccountTaxLookup = {
+  accountTaxById: Map<string, string | null>;
+  subAccountTaxById: Map<string, string | null>;
 };
+
+// 勘定科目マスタ（getMoneyForwardAccounts のレスポンス）から、科目ID・補助科目IDごとの
+// デフォルト税区分ID(tax_id)を引けるようにする。税区分の判定は税理士業務であり、
+// Gemini の判断ではなくマスタの値を機械的に採用するため、このマップで上書きする。
+function buildAccountTaxLookup(accounts: MfAccountOption[]): AccountTaxLookup {
+  const accountTaxById = new Map<string, string | null>();
+  const subAccountTaxById = new Map<string, string | null>();
+
+  for (const account of accounts) {
+    if (typeof account.id === "string") {
+      accountTaxById.set(account.id, account.tax_id ?? null);
+    }
+    for (const subAccount of account.sub_accounts ?? []) {
+      if (typeof subAccount.id === "string") {
+        subAccountTaxById.set(subAccount.id, subAccount.tax_id ?? null);
+      }
+    }
+  }
+
+  return { accountTaxById, subAccountTaxById };
+}
+
+// 補助科目が指定されていればその税区分を優先し、なければ勘定科目の税区分を採用する。
+// どちらもマスタに見つからない場合は null（tax_id 未指定）とし、MF 側の既定に委ねる。
+function resolveMasterTaxId({
+  lookup,
+  accountId,
+  subAccountId,
+}: {
+  lookup: AccountTaxLookup;
+  accountId: string;
+  subAccountId: string | null | undefined;
+}): string | null {
+  if (subAccountId) {
+    const subTaxId = lookup.subAccountTaxById.get(subAccountId);
+    if (subTaxId) return subTaxId;
+  }
+
+  const accountTaxId = lookup.accountTaxById.get(accountId);
+  if (accountTaxId) return accountTaxId;
+
+  return null;
+}
 
 const defaultGeminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const fallbackGeminiModels = (
@@ -264,7 +304,6 @@ function buildPrompt({
   submissionTimestampLabel,
   customerJournalPrompt,
   accounts,
-  taxes,
 }: {
   ocr: ReceiptOcrResult;
   transactionNote: string;
@@ -274,7 +313,6 @@ function buildPrompt({
   submissionTimestampLabel: string;
   customerJournalPrompt: string | null;
   accounts: MfAccountOption[];
-  taxes: MfTaxOption[];
 }) {
   const hasCustomerPrompt =
     typeof customerJournalPrompt === "string" &&
@@ -283,14 +321,15 @@ function buildPrompt({
   return [
     "あなたは日本の会計実務に詳しい記帳代行アシスタントです。",
     "領収書OCR結果とユーザー入力から、Money Forward Cloud Accounting API の /api/v3/journals に渡す journal JSON だけを返してください。",
-    "必ず下記の利用可能な勘定科目ID、補助科目ID、税区分IDだけを使用してください。推測でIDを作らないでください。",
+    "必ず下記の利用可能な勘定科目ID、補助科目IDだけを使用してください。推測でIDを作らないでください。",
+    "税区分（tax_id）はシステム側で勘定科目マスタから自動設定します。あなたはtax_idを指定する必要はありません（指定しても無視されます）。勘定科目と補助科目の選択に集中してください。",
     "通常仕訳として journal_type は journal_entry にしてください。",
     "未実現仕訳として扱うための特別なフラグや invoice_kind は送信しないでください。",
     "貸方は支払方法に応じて、現金、クレジットカード等に近い科目を選んでください。見つからない場合は、利用可能な候補から最も近い資産または負債科目を選んでください。",
     "借方は取引内容、店舗名、OCR結果から最も自然な費用科目または仕入科目を選んでください。",
     "摘要 remark には、店舗名、取引内容、添付ファイル名を短く含めてください。",
     "顧客別の仕訳生成指示がある場合は、勘定科目、補助科目、摘要、タグの判断に反映してください。",
-    "ただし、利用可能な勘定科目ID、補助科目ID、税区分IDに存在しない値は絶対に使わないでください。",
+    "ただし、利用可能な勘定科目ID、補助科目IDに存在しない値は絶対に使わないでください。",
     "顧客別指示にタグ指定がある場合は tags に追加してください。ただし AI タグは必ず含めてください。",
     "摘要 remark には顧客別指示を反映しても、添付ファイル名を必ず含めてください。",
     "金額は税込合計額を value に入れてください。",
@@ -310,9 +349,8 @@ function buildPrompt({
       ? 'タグには "確認" も必ず含めてください（日付が推定のため、後で確認が必要です）。'
       : "",
     `勘定科目候補: ${JSON.stringify(accounts.slice(0, 200))}`,
-    `税区分候補: ${JSON.stringify(taxes.slice(0, 120))}`,
     "",
-    '返答例: {"transaction_date":"2026-05-15","journal_type":"journal_entry","memo":"receipt import","tags":["AI"],"branches":[{"remark":"店舗名 取引内容 file.jpg","debitor":{"value":1500,"account_id":"...","tax_id":"..."},"creditor":{"value":1500,"account_id":"...","tax_id":"..."}}]}',
+    '返答例: {"transaction_date":"2026-05-15","journal_type":"journal_entry","memo":"receipt import","tags":["AI"],"branches":[{"remark":"店舗名 取引内容 file.jpg","debitor":{"value":1500,"account_id":"..."},"creditor":{"value":1500,"account_id":"..."}}]}',
   ].join("\n");
 }
 
@@ -325,7 +363,6 @@ export async function generateMfJournalWithGemini({
   submissionTimestampLabel,
   customerJournalPrompt = null,
   accounts,
-  taxes,
 }: {
   ocr: ReceiptOcrResult;
   transactionNote: string;
@@ -335,7 +372,6 @@ export async function generateMfJournalWithGemini({
   submissionTimestampLabel: string;
   customerJournalPrompt?: string | null;
   accounts: MfAccountOption[];
-  taxes: MfTaxOption[];
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -343,6 +379,7 @@ export async function generateMfJournalWithGemini({
     throw new Error("GEMINI_API_KEY is not configured.");
   }
 
+  const taxLookup = buildAccountTaxLookup(accounts);
   let lastError = "Gemini journal generation failed.";
 
   for (const { model, delay } of getGeminiAttempts()) {
@@ -373,7 +410,6 @@ export async function generateMfJournalWithGemini({
                       submissionTimestampLabel,
                       customerJournalPrompt,
                       accounts,
-                      taxes,
                     }),
                   },
                 ],
@@ -426,6 +462,24 @@ export async function generateMfJournalWithGemini({
                 voucherFileName,
               })
             : remark,
+          // 税区分は Gemini の選択を信用せず、選ばれた勘定科目/補助科目に
+          // 紐づくマスタのデフォルト税区分IDで機械的に上書きする。
+          debitor: {
+            ...branch.debitor,
+            tax_id: resolveMasterTaxId({
+              lookup: taxLookup,
+              accountId: branch.debitor.account_id,
+              subAccountId: branch.debitor.sub_account_id,
+            }),
+          },
+          creditor: {
+            ...branch.creditor,
+            tax_id: resolveMasterTaxId({
+              lookup: taxLookup,
+              accountId: branch.creditor.account_id,
+              subAccountId: branch.creditor.sub_account_id,
+            }),
+          },
         })),
       };
     } catch (error) {

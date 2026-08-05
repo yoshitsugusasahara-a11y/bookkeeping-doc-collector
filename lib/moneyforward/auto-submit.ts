@@ -6,7 +6,6 @@ import {
   buildVoucherFileName,
   getExtensionFromMimeType,
   getMoneyForwardAccounts,
-  getMoneyForwardTaxes,
   getValidMoneyForwardAccessToken,
   postMoneyForwardJournal,
   postMoneyForwardVouchers,
@@ -136,14 +135,10 @@ export async function submitReceiptToMoneyForward({
     }
   }
 
-  const [accountsResponse, taxesResponse] = await Promise.all([
-    getMoneyForwardAccounts(accessToken),
-    getMoneyForwardTaxes(accessToken),
-  ]);
+  const accountsResponse = await getMoneyForwardAccounts(accessToken);
   const accounts = Array.isArray(accountsResponse.accounts)
     ? accountsResponse.accounts
     : [];
-  const taxes = Array.isArray(taxesResponse.taxes) ? taxesResponse.taxes : [];
   const voucherFileName = file
     ? buildVoucherFileName({
         date: ocr.date,
@@ -163,7 +158,6 @@ export async function submitReceiptToMoneyForward({
     submissionTimestampLabel: formatSubmittedAt(submittedAt),
     customerJournalPrompt,
     accounts: accounts as never[],
-    taxes: taxes as never[],
   });
   const journalResponse = await postMoneyForwardJournal({
     accessToken,
