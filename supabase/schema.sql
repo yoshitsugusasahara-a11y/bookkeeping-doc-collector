@@ -133,7 +133,23 @@ alter table public.submissions
   add column if not exists mf_journal_id text,
   add column if not exists mf_voucher_file_id text,
   add column if not exists mf_sent_at timestamptz,
-  add column if not exists hidden_at timestamptz;
+  add column if not exists hidden_at timestamptz,
+  -- 税率別の内訳と、複数勘定科目に分かれる可能性の判定（いずれもOCR時に確定）
+  add column if not exists ocr_tax_rate_8_subtotal integer,
+  add column if not exists ocr_tax_rate_10_subtotal integer,
+  add column if not exists ocr_has_multiple_tax_rates boolean not null default false,
+  add column if not exists ocr_needs_tax_rate_review boolean not null default false,
+  add column if not exists ocr_has_multiple_account_candidates boolean not null default false,
+  add column if not exists ocr_account_review_reason text,
+  -- MFへ送る仕訳。画面に表示して承認された内容がそのまま送られるよう、
+  -- 生成時のまま保存し送信時には作り直さない。
+  add column if not exists mf_journal_preview jsonb,
+  add column if not exists mf_journal_preview_status text not null default 'pending',
+  add column if not exists mf_journal_preview_error text,
+  add column if not exists mf_journal_preview_generated_at timestamptz,
+  -- 誰がいつ承認したか（送信の根拠として残す）
+  add column if not exists approved_at timestamptz,
+  add column if not exists approved_by_user_id uuid;
 
 alter table public.customer_accounts
   add column if not exists error_drive_folder_id text,
@@ -141,7 +157,15 @@ alter table public.customer_accounts
   add column if not exists irregular_drive_folder_id text,
   add column if not exists irregular_drive_folder_name text,
   add column if not exists journal_prompt text,
-  add column if not exists submission_retention_limit integer not null default 200;
+  add column if not exists submission_retention_limit integer not null default 200,
+  -- 借方が複数科目に分かれる可能性がある資料の仮計上先（顧客ごとに設定）
+  add column if not exists suspense_account_id text,
+  add column if not exists suspense_account_name text,
+  -- 仕訳の送信方法。既定は自動送信しない（利用者が資料ごとに送信する）。
+  add column if not exists auto_send_enabled boolean not null default false,
+  add column if not exists skip_approval boolean not null default false,
+  add column if not exists skip_approval_consented_at timestamptz,
+  add column if not exists skip_approval_consented_by uuid;
 
 create table if not exists public.mf_connections (
   id uuid primary key default gen_random_uuid(),

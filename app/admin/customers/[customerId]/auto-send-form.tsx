@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
+import { ToggleSwitch } from "@/components/toggle-switch";
 import { updateCustomerAutoSend } from "./actions";
 
 export function AutoSendForm({
@@ -39,18 +40,13 @@ export function AutoSendForm({
 
   return (
     <div className="ocr-edit-form">
-      <label className="field">
-        <span>自動送信</span>
-        <span className="checkbox-line">
-          <input
-            type="checkbox"
-            checked={autoSendEnabled}
-            disabled={isSaving}
-            onChange={(event) => handleChange(event.target.checked)}
-          />
-          <span>AIが作成した仕訳をマネーフォワードへ自動送信する</span>
-        </span>
-      </label>
+      <ToggleSwitch
+        checked={autoSendEnabled}
+        disabled={isSaving}
+        onChange={handleChange}
+        label="自動送信"
+        description="AIが作成した仕訳をマネーフォワードへ自動送信します。オフの場合、顧客が資料ごとに送信します。"
+      />
 
       <dl className="ocr-summary compact-summary">
         <div>

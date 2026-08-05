@@ -9,6 +9,7 @@ import {
   processCustomerPendingJournalPreviews,
   processSubmissionToMoneyForward,
 } from "@/lib/receipts/process-submissions";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type OcrUpdateState = {
@@ -55,9 +56,13 @@ export async function updateAutoSendEnabled(
   clientSlug: string,
   enabled: boolean,
 ): Promise<{ status: "success" | "error"; message?: string }> {
-  const { supabase, account } = await getApprovedClientAccount(clientSlug);
+  const { account } = await getApprovedClientAccount(clientSlug);
 
-  const { error } = await supabase
+  // customer_accounts は顧客のセッションからは更新できない（RLSにより
+  // 0件更新となり、エラーにもならず黙って失敗する）。上で本人の顧客であることを
+  // 確認済みなので、対象を account.id に限定したうえで管理用クライアントで更新する。
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("customer_accounts")
     .update(
       enabled
@@ -71,9 +76,10 @@ export async function updateAutoSendEnabled(
             skip_approval_consented_by: null,
           },
     )
-    .eq("id", account.id);
+    .eq("id", account.id)
+    .select("id");
 
-  if (error) {
+  if (error || !data || data.length === 0) {
     console.error("Failed to update auto send setting", error);
     return { status: "error", message: "設定を保存できませんでした。" };
   }
@@ -106,7 +112,9 @@ export async function updateSkipApproval(
     };
   }
 
-  const { error } = await supabase
+  // updateAutoSendEnabled と同じ理由で管理用クライアントを使う。
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("customer_accounts")
     .update(
       skip
@@ -121,9 +129,10 @@ export async function updateSkipApproval(
             skip_approval_consented_by: null,
           },
     )
-    .eq("id", account.id);
+    .eq("id", account.id)
+    .select("id");
 
-  if (error) {
+  if (error || !data || data.length === 0) {
     console.error("Failed to update skip approval setting", error);
     return { status: "error", message: "設定を保存できませんでした。" };
   }

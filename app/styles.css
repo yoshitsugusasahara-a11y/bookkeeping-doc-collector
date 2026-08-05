@@ -473,6 +473,53 @@ select:disabled {
   border-bottom: 2px solid var(--line);
 }
 
+.toggle-row {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+}
+
+.toggle-switch {
+  background: #d4dbd6;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  flex: none;
+  height: 30px;
+  margin-top: 2px;
+  padding: 3px;
+  position: relative;
+  transition: background 0.15s ease;
+  width: 54px;
+}
+
+.toggle-switch.on {
+  background: var(--green);
+}
+
+.toggle-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.toggle-knob {
+  background: #fff;
+  border-radius: 50%;
+  display: block;
+  height: 24px;
+  transition: transform 0.15s ease;
+  width: 24px;
+}
+
+.toggle-switch.on .toggle-knob {
+  transform: translateX(24px);
+}
+
+.toggle-copy {
+  display: grid;
+  gap: 4px;
+}
+
 /* チェックボックスは上の input 共通指定（min-height:44px 等）を打ち消す */
 .checkbox-line {
   align-items: center;
