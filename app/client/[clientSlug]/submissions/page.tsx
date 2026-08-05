@@ -65,6 +65,15 @@ function getMfStatusLabel(status?: string | null) {
   return "MF未送信";
 }
 
+function formatTaxBreakdown(rate8?: number | null, rate10?: number | null) {
+  const has8 = typeof rate8 === "number";
+  const has10 = typeof rate10 === "number";
+  if (has8 && has10) return `8%対象 ${formatAmount(rate8)} / 10%対象 ${formatAmount(rate10)}`;
+  if (has8) return `8%（軽減税率）のみ ${formatAmount(rate8)}`;
+  if (has10) return `10%（標準税率）のみ ${formatAmount(rate10)}`;
+  return "未設定";
+}
+
 function getPaymentMethodLabel(method?: string | null, isCreditCard?: boolean | null) {
   if (method === "credit_card" || isCreditCard === true) return "クレジット払い";
   if (method === "cashless") return "キャッシュレス等";
@@ -132,7 +141,7 @@ export default async function ClientSubmissionsPage({
   let submissionQuery = supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_updated_at, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_updated_at, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", account.id)
     .is("hidden_at", null)
@@ -369,6 +378,8 @@ export default async function ClientSubmissionsPage({
                     ocrSummary={item.ocr_summary}
                     ocrPaymentMethod={item.ocr_payment_method}
                     ocrIsCreditCard={item.ocr_is_credit_card}
+                    ocrTaxRate8Subtotal={item.ocr_tax_rate_8_subtotal}
+                    ocrTaxRate10Subtotal={item.ocr_tax_rate_10_subtotal}
                     ocrUpdatedAt={item.ocr_updated_at}
                   />
 
@@ -376,6 +387,15 @@ export default async function ClientSubmissionsPage({
                     <div>
                       <dt>金額</dt>
                       <dd>{formatAmount(item.ocr_amount)}</dd>
+                    </div>
+                    <div>
+                      <dt>消費税区分</dt>
+                      <dd>
+                        {formatTaxBreakdown(
+                          item.ocr_tax_rate_8_subtotal,
+                          item.ocr_tax_rate_10_subtotal,
+                        )}
+                      </dd>
                     </div>
                     <div>
                       <dt>MF送信日時</dt>

@@ -21,6 +21,8 @@ export function OcrEditForm({
   ocrSummary,
   ocrPaymentMethod,
   ocrIsCreditCard,
+  ocrTaxRate8Subtotal,
+  ocrTaxRate10Subtotal,
   ocrUpdatedAt,
 }: {
   clientSlug: string;
@@ -32,6 +34,8 @@ export function OcrEditForm({
   ocrSummary?: string | null;
   ocrPaymentMethod?: string | null;
   ocrIsCreditCard?: boolean | null;
+  ocrTaxRate8Subtotal?: number | null;
+  ocrTaxRate10Subtotal?: number | null;
   ocrUpdatedAt?: string | null;
 }) {
   const [isSaving, setIsSaving] = useState(false);
@@ -145,6 +149,29 @@ export function OcrEditForm({
           <option value="cashless">キャッシュレス等</option>
         </select>
       </label>
+      <label className="field">
+        <span>8%対象の税込金額（軽減税率）</span>
+        <input
+          inputMode="numeric"
+          name="ocrTaxRate8Subtotal"
+          defaultValue={ocrTaxRate8Subtotal ?? ""}
+          placeholder="対象なしの場合は空欄"
+          disabled={disabled}
+        />
+      </label>
+      <label className="field">
+        <span>10%対象の税込金額（標準税率）</span>
+        <input
+          inputMode="numeric"
+          name="ocrTaxRate10Subtotal"
+          defaultValue={ocrTaxRate10Subtotal ?? ""}
+          placeholder="対象なしの場合は空欄"
+          disabled={disabled}
+        />
+      </label>
+      <small className="muted">
+        レシートに軽減税率(8%)・標準税率(10%)の内訳が印字されている場合に入力してください。両方入力すると2件の仕訳に分けて登録されます。片方のみ、または空欄のままでも送信できます。
+      </small>
       <div className="action-row">
         <button
           className="secondary-action compact"

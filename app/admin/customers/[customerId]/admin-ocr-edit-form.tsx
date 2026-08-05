@@ -22,6 +22,15 @@ function getPaymentMethodLabel(
   return "現金";
 }
 
+function formatTaxBreakdown(rate8?: number | null, rate10?: number | null) {
+  const has8 = typeof rate8 === "number";
+  const has10 = typeof rate10 === "number";
+  if (has8 && has10) return `8%対象 ${formatAmount(rate8)} / 10%対象 ${formatAmount(rate10)}`;
+  if (has8) return `8%（軽減税率）のみ ${formatAmount(rate8)}`;
+  if (has10) return `10%（標準税率）のみ ${formatAmount(rate10)}`;
+  return "未設定";
+}
+
 export function AdminOcrEditForm({
   customerId,
   submissionId,
@@ -32,6 +41,8 @@ export function AdminOcrEditForm({
   ocrSummary,
   ocrPaymentMethod,
   ocrIsCreditCard,
+  ocrTaxRate8Subtotal,
+  ocrTaxRate10Subtotal,
   ocrUpdatedAt,
 }: {
   customerId: string;
@@ -43,6 +54,8 @@ export function AdminOcrEditForm({
   ocrSummary?: string | null;
   ocrPaymentMethod?: string | null;
   ocrIsCreditCard?: boolean | null;
+  ocrTaxRate8Subtotal?: number | null;
+  ocrTaxRate10Subtotal?: number | null;
   ocrUpdatedAt?: string | null;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -68,6 +81,8 @@ export function AdminOcrEditForm({
         ocrStore: String(formData.get("ocrStore") || ""),
         ocrSummary: String(formData.get("ocrSummary") || ""),
         ocrPaymentMethod: String(formData.get("ocrPaymentMethod") || ""),
+        ocrTaxRate8Subtotal: String(formData.get("ocrTaxRate8Subtotal") || ""),
+        ocrTaxRate10Subtotal: String(formData.get("ocrTaxRate10Subtotal") || ""),
         ocrUpdatedAt: ocrUpdatedAt || null,
       });
 
@@ -109,6 +124,10 @@ export function AdminOcrEditForm({
         <div>
           <dt>概要</dt>
           <dd>{ocrSummary || "未取得"}</dd>
+        </div>
+        <div>
+          <dt>消費税区分</dt>
+          <dd>{formatTaxBreakdown(ocrTaxRate8Subtotal, ocrTaxRate10Subtotal)}</dd>
         </div>
         <div>
           <dt>支払方法</dt>
@@ -181,6 +200,29 @@ export function AdminOcrEditForm({
           <option value="cashless">キャッシュレス等</option>
         </select>
       </label>
+      <label className="field">
+        <span>8%対象の税込金額（軽減税率）</span>
+        <input
+          inputMode="numeric"
+          name="ocrTaxRate8Subtotal"
+          defaultValue={ocrTaxRate8Subtotal ?? ""}
+          placeholder="対象なしの場合は空欄"
+          disabled={isSaving}
+        />
+      </label>
+      <label className="field">
+        <span>10%対象の税込金額（標準税率）</span>
+        <input
+          inputMode="numeric"
+          name="ocrTaxRate10Subtotal"
+          defaultValue={ocrTaxRate10Subtotal ?? ""}
+          placeholder="対象なしの場合は空欄"
+          disabled={isSaving}
+        />
+      </label>
+      <small className="muted">
+        レシートに軽減税率(8%)・標準税率(10%)の内訳が印字されている場合に入力してください。両方入力すると2件の仕訳に分けて登録されます。
+      </small>
       <div className="action-row">
         <button
           className="secondary-action compact"

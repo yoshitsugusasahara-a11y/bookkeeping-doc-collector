@@ -50,6 +50,11 @@ function parseAmount(value: FormDataEntryValue | null) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseTaxRateSubtotal(value: FormDataEntryValue | null) {
+  const parsed = parseAmount(value);
+  return parsed !== null && parsed > 0 ? parsed : null;
+}
+
 function parsePaymentMethod(value: FormDataEntryValue | null) {
   if (value === "credit_card") return "credit_card";
   if (value === "cashless") return "cashless";
@@ -67,6 +72,12 @@ export async function updateSubmissionOcr(
   const ocrStore = String(formData.get("ocrStore") || "").trim() || null;
   const ocrSummary = String(formData.get("ocrSummary") || "").trim() || null;
   const ocrPaymentMethod = parsePaymentMethod(formData.get("ocrPaymentMethod"));
+  const ocrTaxRate8Subtotal = parseTaxRateSubtotal(
+    formData.get("ocrTaxRate8Subtotal"),
+  );
+  const ocrTaxRate10Subtotal = parseTaxRateSubtotal(
+    formData.get("ocrTaxRate10Subtotal"),
+  );
   const ocrUpdatedAtBefore =
     String(formData.get("ocrUpdatedAt") || "").trim() || null;
 
@@ -118,6 +129,11 @@ export async function updateSubmissionOcr(
       ocr_summary: ocrSummary,
       ocr_payment_method: ocrPaymentMethod,
       ocr_is_credit_card: ocrPaymentMethod === "credit_card",
+      ocr_tax_rate_8_subtotal: ocrTaxRate8Subtotal,
+      ocr_tax_rate_10_subtotal: ocrTaxRate10Subtotal,
+      ocr_has_multiple_tax_rates:
+        ocrTaxRate8Subtotal !== null && ocrTaxRate10Subtotal !== null,
+      ocr_needs_tax_rate_review: false,
       ocr_updated_at: ocrUpdatedAtNow,
       mf_status: "not_sent",
       mf_error: null,

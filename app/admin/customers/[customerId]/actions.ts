@@ -460,6 +460,11 @@ function parseOcrPaymentMethod(value: string) {
   return "cash";
 }
 
+function parseOcrTaxRateSubtotal(value: string) {
+  const parsed = parseOcrAmount(value);
+  return parsed !== null && parsed > 0 ? parsed : null;
+}
+
 export async function updateSubmissionOcrAsAdmin(
   customerId: string,
   submissionId: string,
@@ -469,6 +474,8 @@ export async function updateSubmissionOcrAsAdmin(
     ocrStore: string;
     ocrSummary: string;
     ocrPaymentMethod: string;
+    ocrTaxRate8Subtotal: string;
+    ocrTaxRate10Subtotal: string;
     ocrUpdatedAt: string | null;
   },
 ): Promise<OcrUpdateState> {
@@ -506,6 +513,8 @@ export async function updateSubmissionOcrAsAdmin(
   }
 
   const ocrPaymentMethod = parseOcrPaymentMethod(values.ocrPaymentMethod);
+  const ocrTaxRate8Subtotal = parseOcrTaxRateSubtotal(values.ocrTaxRate8Subtotal);
+  const ocrTaxRate10Subtotal = parseOcrTaxRateSubtotal(values.ocrTaxRate10Subtotal);
   const { error } = await supabase
     .from("submissions")
     .update({
@@ -517,6 +526,11 @@ export async function updateSubmissionOcrAsAdmin(
       ocr_summary: values.ocrSummary.trim() || null,
       ocr_payment_method: ocrPaymentMethod,
       ocr_is_credit_card: ocrPaymentMethod === "credit_card",
+      ocr_tax_rate_8_subtotal: ocrTaxRate8Subtotal,
+      ocr_tax_rate_10_subtotal: ocrTaxRate10Subtotal,
+      ocr_has_multiple_tax_rates:
+        ocrTaxRate8Subtotal !== null && ocrTaxRate10Subtotal !== null,
+      ocr_needs_tax_rate_review: false,
       ocr_updated_at: new Date().toISOString(),
       mf_status: "not_sent",
       mf_error: null,
