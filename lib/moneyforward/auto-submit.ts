@@ -141,16 +141,12 @@ export async function submitReceiptToMoneyForward({
     ? accountsResponse.accounts
     : [];
 
-  let reducedRateTaxId: string | null = null;
+  let taxes: Array<{ id: string; name?: string; tax_rate?: number }> = [];
   if (ocr.has_multiple_tax_rates) {
     const taxesResponse = await getMoneyForwardTaxes(accessToken);
-    const taxes = Array.isArray(taxesResponse.taxes)
-      ? (taxesResponse.taxes as Array<{ id: string; name?: string; rate?: number }>)
+    taxes = Array.isArray(taxesResponse.taxes)
+      ? (taxesResponse.taxes as Array<{ id: string; name?: string; tax_rate?: number }>)
       : [];
-    const reducedTax =
-      taxes.find((t) => typeof t.name === "string" && t.name.includes("軽減")) ??
-      taxes.find((t) => t.rate === 8);
-    reducedRateTaxId = reducedTax?.id ?? null;
   }
 
   const voucherFileName = file
@@ -172,7 +168,7 @@ export async function submitReceiptToMoneyForward({
     submissionTimestampLabel: formatSubmittedAt(submittedAt),
     customerJournalPrompt,
     accounts: accounts as never[],
-    reducedRateTaxId,
+    taxes,
   });
   const journalResponse = await postMoneyForwardJournal({
     accessToken,

@@ -37,6 +37,12 @@ type MfAccountOption = {
   }>;
 };
 
+export type MfTaxOption = {
+  id: string;
+  name?: string;
+  tax_rate?: number;
+};
+
 type AccountTaxLookup = {
   accountTaxById: Map<string, string | null>;
   subAccountTaxById: Map<string, string | null>;
@@ -109,6 +115,46 @@ function resolveMasterTaxId({
   if (accountTaxId) return accountTaxId;
 
   return null;
+}
+
+// 税区分名から「課税仕入」「共通課税仕入」「非課税対応仕入」等の系統名を取り出す。
+// 「(軽)」表記と税率(NN%)部分を除去することで、10%区分と8%区分が同じ系統かどうか比較できる。
+function taxCategoryKey(name: string): string {
+  return name
+    .replace(/\(軽\)/g, "")
+    .replace(/\d+(\.\d+)?%/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+// 借方のデフォルト税区分（マスタ由来、通常は標準10%）と同じ系統の軽減税率(8%)区分を探す。
+// 系統が特定できない、または対応する8%区分が見つからない場合は null（=デフォルトのまま）。
+function buildReducedRateTaxResolver(taxes: MfTaxOption[]) {
+  const taxesById = new Map<string, MfTaxOption>();
+  for (const tax of taxes) {
+    if (typeof tax.id === "string") taxesById.set(tax.id, tax);
+  }
+
+  return function resolveReducedRateTaxId(baseTaxId: string | null): string | null {
+    if (!baseTaxId) return null;
+
+    const baseTax = taxesById.get(baseTaxId);
+    if (!baseTax || typeof baseTax.name !== "string") return null;
+
+    const baseCategory = taxCategoryKey(baseTax.name);
+
+    const candidate = taxes.find(
+      (tax) =>
+        tax.id !== baseTaxId &&
+        typeof tax.name === "string" &&
+        tax.name.includes("(軽)") &&
+        typeof tax.tax_rate === "number" &&
+        Math.abs(tax.tax_rate - 0.08) < 0.0001 &&
+        taxCategoryKey(tax.name) === baseCategory,
+    );
+
+    return candidate?.id ?? null;
+  };
 }
 
 const defaultGeminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -415,7 +461,7 @@ export async function generateMfJournalWithGemini({
   submissionTimestampLabel,
   customerJournalPrompt = null,
   accounts,
-  reducedRateTaxId = null,
+  taxes = [],
 }: {
   ocr: ReceiptOcrResult;
   transactionNote: string;
@@ -425,7 +471,7 @@ export async function generateMfJournalWithGemini({
   submissionTimestampLabel: string;
   customerJournalPrompt?: string | null;
   accounts: MfAccountOption[];
-  reducedRateTaxId?: string | null;
+  taxes?: MfTaxOption[];
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -434,6 +480,7 @@ export async function generateMfJournalWithGemini({
   }
 
   const taxLookup = buildAccountTaxLookup(accounts);
+  const resolveReducedRateTaxId = buildReducedRateTaxResolver(taxes);
   let lastError = "Gemini journal generation failed.";
 
   for (const { model, delay } of getGeminiAttempts()) {
@@ -535,16 +582,18 @@ export async function generateMfJournalWithGemini({
             ? `${baseRemark.slice(0, 200 - taxReviewNote.length)}${taxReviewNote}`.replace(/\s+/g, " ").slice(0, 200)
             : baseRemark;
 
-          // 軽減税率ブランチには reducedRateTaxId を借方に適用する。
-          // それ以外はマスタのデフォルト税区分IDで上書きする（通常パスと同じ）。
+          // まずマスタのデフォルト税区分ID（通常は標準10%側）を取得し、
+          // 軽減税率ブランチについては同じ系統の8%区分が見つかればそちらに差し替える。
+          // 見つからない場合（免税事業者などマスタに軽減税率区分が存在しない）はデフォルトのまま。
+          const baseDebitorTaxId = resolveMasterTaxId({
+            lookup: taxLookup,
+            accountId: branch.debitor.account_id,
+            subAccountId: branch.debitor.sub_account_id,
+          });
           const debitorTaxId =
-            tax_rate_hint === 8 && reducedRateTaxId !== null
-              ? reducedRateTaxId
-              : resolveMasterTaxId({
-                  lookup: taxLookup,
-                  accountId: branch.debitor.account_id,
-                  subAccountId: branch.debitor.sub_account_id,
-                });
+            tax_rate_hint === 8
+              ? resolveReducedRateTaxId(baseDebitorTaxId) ?? baseDebitorTaxId
+              : baseDebitorTaxId;
 
           return {
             ...branch,
