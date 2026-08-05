@@ -6,6 +6,7 @@ import {
 import {
   analyzeReceiptWithGemini,
   type ReceiptOcrResult,
+  type TaxBreakdown,
 } from "@/lib/gemini/receipt-ocr";
 import {
   isGoogleDriveConfigured,
@@ -27,7 +28,7 @@ import type { Database } from "@/lib/supabase/types";
 
 const receiptUploadBucket = "receipt_uploads";
 const submissionProcessingColumns =
-  "id, customer_account_id, transaction_note, file_name, mime_type, source_storage_path, submitted_at, drive_file_id, drive_view_url, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, mf_status";
+  "id, customer_account_id, transaction_note, file_name, mime_type, source_storage_path, submitted_at, drive_file_id, drive_view_url, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_tax_rates, ocr_needs_tax_rate_review, mf_status";
 
 type SubmissionRow = {
   id: string;
@@ -52,6 +53,10 @@ type SubmissionRow = {
   ocr_summary: string | null;
   ocr_payment_method: "cash" | "credit_card" | "cashless" | null;
   ocr_is_credit_card: boolean | null;
+  ocr_tax_rate_8_subtotal?: number | null;
+  ocr_tax_rate_10_subtotal?: number | null;
+  ocr_has_multiple_tax_rates?: boolean;
+  ocr_needs_tax_rate_review?: boolean;
   mf_status: string;
 };
 
@@ -74,6 +79,15 @@ function fileFromBlob(blob: Blob, fileName: string, mimeType: string) {
 
 function getCompletedOcr(submission: SubmissionRow): ReceiptOcrResult | null {
   if (submission.ocr_status !== "completed") return null;
+
+  const taxBreakdown: TaxBreakdown[] = [];
+  if (submission.ocr_tax_rate_8_subtotal != null) {
+    taxBreakdown.push({ rate: 8, subtotal: submission.ocr_tax_rate_8_subtotal });
+  }
+  if (submission.ocr_tax_rate_10_subtotal != null) {
+    taxBreakdown.push({ rate: 10, subtotal: submission.ocr_tax_rate_10_subtotal });
+  }
+
   return {
     date: submission.ocr_date,
     amount: submission.ocr_amount,
@@ -81,6 +95,9 @@ function getCompletedOcr(submission: SubmissionRow): ReceiptOcrResult | null {
     summary: submission.ocr_summary,
     payment_method: submission.ocr_payment_method || "cash",
     is_credit_card: submission.ocr_is_credit_card,
+    tax_breakdown: taxBreakdown.length > 0 ? taxBreakdown : null,
+    has_multiple_tax_rates: submission.ocr_has_multiple_tax_rates ?? false,
+    needs_tax_rate_review: submission.ocr_needs_tax_rate_review ?? false,
   };
 }
 
@@ -430,6 +447,10 @@ async function runOcrForSubmission({
       ocr_summary: ocr.result.summary,
       ocr_payment_method: ocr.result.payment_method,
       ocr_is_credit_card: ocr.result.is_credit_card,
+      ocr_tax_rate_8_subtotal: ocr.result.tax_breakdown?.find((b) => b.rate === 8)?.subtotal ?? null,
+      ocr_tax_rate_10_subtotal: ocr.result.tax_breakdown?.find((b) => b.rate === 10)?.subtotal ?? null,
+      ocr_has_multiple_tax_rates: ocr.result.has_multiple_tax_rates,
+      ocr_needs_tax_rate_review: ocr.result.needs_tax_rate_review,
       ocr_updated_at: new Date().toISOString(),
     })
     .eq("id", submission.id);

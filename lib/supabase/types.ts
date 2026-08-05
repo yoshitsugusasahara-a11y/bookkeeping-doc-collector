@@ -143,6 +143,10 @@ export type Database = {
           ocr_summary: string | null;
           ocr_payment_method: "cash" | "credit_card" | "cashless";
           ocr_is_credit_card: boolean | null;
+          ocr_tax_rate_8_subtotal: number | null;
+          ocr_tax_rate_10_subtotal: number | null;
+          ocr_has_multiple_tax_rates: boolean;
+          ocr_needs_tax_rate_review: boolean;
           ocr_updated_at: string | null;
           mf_status: MfSubmissionStatus;
           mf_error: string | null;
@@ -182,6 +186,10 @@ export type Database = {
           ocr_summary?: string | null;
           ocr_payment_method?: "cash" | "credit_card" | "cashless";
           ocr_is_credit_card?: boolean | null;
+          ocr_tax_rate_8_subtotal?: number | null;
+          ocr_tax_rate_10_subtotal?: number | null;
+          ocr_has_multiple_tax_rates?: boolean;
+          ocr_needs_tax_rate_review?: boolean;
           ocr_updated_at?: string | null;
           mf_status?: MfSubmissionStatus;
           mf_error?: string | null;
@@ -221,6 +229,10 @@ export type Database = {
           ocr_summary?: string | null;
           ocr_payment_method?: "cash" | "credit_card" | "cashless";
           ocr_is_credit_card?: boolean | null;
+          ocr_tax_rate_8_subtotal?: number | null;
+          ocr_tax_rate_10_subtotal?: number | null;
+          ocr_has_multiple_tax_rates?: boolean;
+          ocr_needs_tax_rate_review?: boolean;
           ocr_updated_at?: string | null;
           mf_status?: MfSubmissionStatus;
           mf_error?: string | null;

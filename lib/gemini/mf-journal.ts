@@ -42,6 +42,32 @@ type AccountTaxLookup = {
   subAccountTaxById: Map<string, string | null>;
 };
 
+type RawBranchWithHint = {
+  remark?: string | null;
+  tax_rate_hint?: 8 | 10 | null;
+  debitor: { value: number; account_id: string; sub_account_id?: string | null; tax_id?: string | null; };
+  creditor: { value: number; account_id: string; sub_account_id?: string | null; tax_id?: string | null; };
+};
+
+type ParsedBranch = {
+  remark: string | null;
+  tax_rate_hint: 8 | 10 | null;
+  debitor: {
+    value: number;
+    account_id: string;
+    tax_id: string | null;
+    sub_account_id: string | null;
+    department_id: string | null;
+  };
+  creditor: {
+    value: number;
+    account_id: string;
+    tax_id: string | null;
+    sub_account_id: string | null;
+    department_id: string | null;
+  };
+};
+
 // 勘定科目マスタ（getMoneyForwardAccounts のレスポンス）から、科目ID・補助科目IDごとの
 // デフォルト税区分ID(tax_id)を引けるようにする。税区分の判定は税理士業務であり、
 // Gemini の判断ではなくマスタの値を機械的に採用するため、このマップで上書きする。
@@ -193,7 +219,11 @@ function normalizeLineDetails(value: unknown) {
   };
 }
 
-function normalizeJournalPayload(value: unknown): MfJournalPayload {
+type ParsedJournal = Omit<MfJournalPayload, "branches"> & {
+  branches: ParsedBranch[];
+};
+
+function normalizeJournalPayload(value: unknown): ParsedJournal {
   const record = getJournalRecord(value);
   const branches = Array.isArray(record.branches) ? record.branches : [];
 
@@ -205,8 +235,8 @@ function normalizeJournalPayload(value: unknown): MfJournalPayload {
     throw new Error("Gemini did not return a usable Money Forward journal.");
   }
 
-  const normalizedBranches = branches.map((branch) => {
-    const line = asRecord(branch);
+  const normalizedBranches: ParsedBranch[] = branches.map((branch) => {
+    const line = asRecord(branch) as Partial<RawBranchWithHint> & Record<string, unknown>;
     const debitor = normalizeLineDetails(line.debitor);
     const creditor = normalizeLineDetails(line.creditor);
 
@@ -216,8 +246,13 @@ function normalizeJournalPayload(value: unknown): MfJournalPayload {
       );
     }
 
+    const rawHint = line.tax_rate_hint;
+    const taxRateHint: 8 | 10 | null =
+      rawHint === 8 || rawHint === 10 ? rawHint : null;
+
     return {
       remark: typeof line.remark === "string" ? line.remark.slice(0, 200) : null,
+      tax_rate_hint: taxRateHint,
       debitor,
       creditor,
     };
@@ -348,9 +383,26 @@ function buildPrompt({
     needsDateConfirmation
       ? 'タグには "確認" も必ず含めてください（日付が推定のため、後で確認が必要です）。'
       : "",
+    ocr.has_multiple_tax_rates
+      ? [
+          "【重要：軽減税率・標準税率の混在レシートです】",
+          "このレシートには8%（軽減税率）対象と10%（標準税率）対象の商品が混在しています。",
+          "必ず税率ごとに branch を1本ずつ生成し、合計で2本の branches を返してください。",
+          `税率別の税込金額: ${JSON.stringify(ocr.tax_breakdown)}`,
+          "各ブランチのルール:",
+          "- value には上記 subtotal をそのまま使用してください。",
+          "- 各ブランチに tax_rate_hint として 8 または 10 を必ず設定してください。",
+          "- 科目の選択に迷った場合は同一の勘定科目を両ブランチで使用してください（金額だけ分割）。",
+          "- 貸方は支払方法に応じた同一科目を両ブランチで使用してください。",
+          "- 各ブランチの remark には「(8%対象)」または「(10%対象)」を末尾に付与してください。",
+          "- 利用可能な勘定科目IDに存在しない値は絶対に使わないでください。",
+        ].join("\n")
+      : "",
     `勘定科目候補: ${JSON.stringify(accounts.slice(0, 200))}`,
     "",
-    '返答例: {"transaction_date":"2026-05-15","journal_type":"journal_entry","memo":"receipt import","tags":["AI"],"branches":[{"remark":"店舗名 取引内容 file.jpg","debitor":{"value":1500,"account_id":"..."},"creditor":{"value":1500,"account_id":"..."}}]}',
+    ocr.has_multiple_tax_rates
+      ? '返答例(複数税率): {"transaction_date":"2026-05-15","journal_type":"journal_entry","memo":"receipt import","tags":["AI"],"branches":[{"tax_rate_hint":10,"remark":"店舗名 取引内容 file.jpg (10%対象)","debitor":{"value":1080,"account_id":"..."},"creditor":{"value":1080,"account_id":"..."}},{"tax_rate_hint":8,"remark":"店舗名 取引内容 file.jpg (8%対象)","debitor":{"value":432,"account_id":"..."},"creditor":{"value":432,"account_id":"..."}}]}'
+      : '返答例: {"transaction_date":"2026-05-15","journal_type":"journal_entry","memo":"receipt import","tags":["AI"],"branches":[{"remark":"店舗名 取引内容 file.jpg","debitor":{"value":1500,"account_id":"..."},"creditor":{"value":1500,"account_id":"..."}}]}',
   ].join("\n");
 }
 
@@ -363,6 +415,7 @@ export async function generateMfJournalWithGemini({
   submissionTimestampLabel,
   customerJournalPrompt = null,
   accounts,
+  reducedRateTaxId = null,
 }: {
   ocr: ReceiptOcrResult;
   transactionNote: string;
@@ -372,6 +425,7 @@ export async function generateMfJournalWithGemini({
   submissionTimestampLabel: string;
   customerJournalPrompt?: string | null;
   accounts: MfAccountOption[];
+  reducedRateTaxId?: string | null;
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -444,6 +498,21 @@ export async function generateMfJournalWithGemini({
         typeof customerJournalPrompt === "string" &&
         customerJournalPrompt.trim().length > 0;
 
+      // 複数税率レシートで tax_rate_hint 8 と 10 が両方揃っていない場合は縮退扱い
+      const hasValidTaxRateHints =
+        journal.branches.some((b) => b.tax_rate_hint === 8) &&
+        journal.branches.some((b) => b.tax_rate_hint === 10);
+      const needsTaxRateReview =
+        ocr.needs_tax_rate_review ||
+        (ocr.has_multiple_tax_rates && !hasValidTaxRateHints);
+
+      const requiredTags =
+        needsDateConfirmation || needsTaxRateReview ? ["確認"] : [];
+
+      const taxReviewNote = needsTaxRateReview
+        ? "（税率が読み取れなかったため仕訳を確認してください）"
+        : "";
+
       return {
         ...journal,
         transaction_date: transactionDate,
@@ -451,36 +520,49 @@ export async function generateMfJournalWithGemini({
         tags: normalizeTags({
           tags: journal.tags || [],
           allowAdditionalTags: hasCustomerPrompt,
-          requiredTags: needsDateConfirmation ? ["確認"] : [],
+          requiredTags,
         }),
-        branches: journal.branches.map((branch) => ({
-          ...branch,
-          remark: hasCustomerPrompt
+        branches: journal.branches.map(({ tax_rate_hint, ...branch }) => {
+          const baseRemark = hasCustomerPrompt
             ? ensureVoucherFileNameInRemark({
                 remark: branch.remark,
                 fallbackRemark: remark,
                 voucherFileName,
               })
-            : remark,
-          // 税区分は Gemini の選択を信用せず、選ばれた勘定科目/補助科目に
-          // 紐づくマスタのデフォルト税区分IDで機械的に上書きする。
-          debitor: {
-            ...branch.debitor,
-            tax_id: resolveMasterTaxId({
-              lookup: taxLookup,
-              accountId: branch.debitor.account_id,
-              subAccountId: branch.debitor.sub_account_id,
-            }),
-          },
-          creditor: {
-            ...branch.creditor,
-            tax_id: resolveMasterTaxId({
-              lookup: taxLookup,
-              accountId: branch.creditor.account_id,
-              subAccountId: branch.creditor.sub_account_id,
-            }),
-          },
-        })),
+            : remark;
+
+          const finalRemark = taxReviewNote
+            ? `${baseRemark.slice(0, 200 - taxReviewNote.length)}${taxReviewNote}`.replace(/\s+/g, " ").slice(0, 200)
+            : baseRemark;
+
+          // 軽減税率ブランチには reducedRateTaxId を借方に適用する。
+          // それ以外はマスタのデフォルト税区分IDで上書きする（通常パスと同じ）。
+          const debitorTaxId =
+            tax_rate_hint === 8 && reducedRateTaxId !== null
+              ? reducedRateTaxId
+              : resolveMasterTaxId({
+                  lookup: taxLookup,
+                  accountId: branch.debitor.account_id,
+                  subAccountId: branch.debitor.sub_account_id,
+                });
+
+          return {
+            ...branch,
+            remark: finalRemark,
+            debitor: {
+              ...branch.debitor,
+              tax_id: debitorTaxId,
+            },
+            creditor: {
+              ...branch.creditor,
+              tax_id: resolveMasterTaxId({
+                lookup: taxLookup,
+                accountId: branch.creditor.account_id,
+                subAccountId: branch.creditor.sub_account_id,
+              }),
+            },
+          };
+        }),
       };
     } catch (error) {
       lastError =

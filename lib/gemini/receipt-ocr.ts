@@ -1,3 +1,8 @@
+export type TaxBreakdown = {
+  rate: 8 | 10;
+  subtotal: number;
+};
+
 export type ReceiptOcrResult = {
   date: string | null;
   amount: number | null;
@@ -5,6 +10,9 @@ export type ReceiptOcrResult = {
   summary: string | null;
   payment_method: "cash" | "credit_card" | "cashless";
   is_credit_card: boolean | null;
+  tax_breakdown: TaxBreakdown[] | null;
+  has_multiple_tax_rates: boolean;
+  needs_tax_rate_review: boolean;
 };
 
 export type ReceiptOcrOutcome =
@@ -64,6 +72,57 @@ function extractJson(text: string) {
   return trimmed;
 }
 
+function normalizeTaxBreakdown(
+  rawBreakdown: unknown,
+  amount: number | null,
+): {
+  taxBreakdown: TaxBreakdown[] | null;
+  hasMultipleTaxRates: boolean;
+  needsTaxRateReview: boolean;
+} {
+  if (!Array.isArray(rawBreakdown) || rawBreakdown.length === 0) {
+    return { taxBreakdown: null, hasMultipleTaxRates: false, needsTaxRateReview: false };
+  }
+
+  const validEntries = rawBreakdown
+    .filter(
+      (item): item is Record<string, unknown> =>
+        item !== null && typeof item === "object",
+    )
+    .filter(
+      (item) =>
+        (item.rate === 8 || item.rate === 10) &&
+        typeof item.subtotal === "number" &&
+        (item.subtotal as number) > 0,
+    );
+
+  if (validEntries.length === 0) {
+    return { taxBreakdown: null, hasMultipleTaxRates: false, needsTaxRateReview: true };
+  }
+
+  // 同一 rate の複数エントリを合算する
+  const mergedMap = new Map<8 | 10, number>();
+  for (const entry of validEntries) {
+    const rate = entry.rate as 8 | 10;
+    mergedMap.set(rate, (mergedMap.get(rate) ?? 0) + (entry.subtotal as number));
+  }
+
+  const merged: TaxBreakdown[] = Array.from(mergedMap.entries()).map(
+    ([rate, subtotal]) => ({ rate, subtotal }),
+  );
+
+  if (amount !== null) {
+    const breakdownSum = merged.reduce((sum, item) => sum + item.subtotal, 0);
+    const tolerance = Math.max(5, amount * 0.02);
+    if (Math.abs(breakdownSum - amount) > tolerance) {
+      return { taxBreakdown: null, hasMultipleTaxRates: false, needsTaxRateReview: true };
+    }
+  }
+
+  const hasMultipleTaxRates = mergedMap.has(8) && mergedMap.has(10);
+  return { taxBreakdown: merged, hasMultipleTaxRates, needsTaxRateReview: false };
+}
+
 function normalizeOcrResult(value: unknown): ReceiptOcrResult {
   const input = value && typeof value === "object" ? value : {};
   const record = input as Record<string, unknown>;
@@ -89,9 +148,13 @@ function normalizeOcrResult(value: unknown): ReceiptOcrResult {
         ? "credit_card"
         : "cash";
 
+  const normalizedAmount = Number.isFinite(amount) ? amount : null;
+  const { taxBreakdown, hasMultipleTaxRates, needsTaxRateReview } =
+    normalizeTaxBreakdown(record.tax_breakdown, normalizedAmount);
+
   return {
     date: typeof record.date === "string" && record.date ? record.date : null,
-    amount: Number.isFinite(amount) ? amount : null,
+    amount: normalizedAmount,
     store: typeof record.store === "string" && record.store ? record.store : null,
     summary:
       typeof record.summary === "string" && record.summary
@@ -99,6 +162,9 @@ function normalizeOcrResult(value: unknown): ReceiptOcrResult {
         : null,
     payment_method: paymentMethod,
     is_credit_card: paymentMethod === "credit_card",
+    tax_breakdown: taxBreakdown,
+    has_multiple_tax_rates: hasMultipleTaxRates,
+    needs_tax_rate_review: needsTaxRateReview,
   };
 }
 
@@ -155,8 +221,15 @@ export async function analyzeReceiptWithGemini({
                     "推測が難しい項目は null にしてください。金額は税込合計を整数で返してください。",
                     "日付は YYYY-MM-DD 形式にしてください。年が不明な場合は null にしてください。",
                     "支払方法がクレジットカード、カード、VISA、Mastercard、JCB、AMEX、交通系IC等なら is_credit_card を true、現金なら false、不明なら null にしてください。",
+                    "レシートに軽減税率（8%）と標準税率（10%）の区分印字がある場合は、税率ごとの税込合計金額を tax_breakdown 配列に含めてください。",
+                    "- 「8%対象」「軽減税率対象」と記載された税込合計 → rate: 8",
+                    "- 「10%対象」「標準税率対象」と記載された税込合計 → rate: 10",
+                    "- subtotal は税込金額の整数（円）で返してください。",
+                    "- 税率区分の印字が読み取れない・存在しない場合は tax_breakdown を null にしてください。",
+                    "- amount（税込合計）= 各 subtotal の合計になるはずですが、読み取り精度の都合で1〜2円の差が生じてもそのまま返してください。",
                     `ユーザー入力の取引内容: ${transactionNote}`,
-                    '返却形式: { "date": "YYYY-MM-DD", "amount": 1500, "store": "店舗名", "summary": "購入品目要約", "payment_method": "credit_card", "is_credit_card": true }',
+                    '返却形式（単一税率 or 区分なし）: { "date": "YYYY-MM-DD", "amount": 1500, "store": "店舗名", "summary": "購入品目要約", "payment_method": "credit_card", "is_credit_card": true, "tax_breakdown": null }',
+                    '返却形式（混在の場合）: { "date": "YYYY-MM-DD", "amount": 5460, "store": "店舗名", "summary": "購入品目要約", "payment_method": "cash", "is_credit_card": false, "tax_breakdown": [{ "rate": 8, "subtotal": 2160 }, { "rate": 10, "subtotal": 3300 }] }',
                   ].join("\n"),
                 },
                 {
