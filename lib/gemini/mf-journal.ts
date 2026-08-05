@@ -560,6 +560,13 @@ export async function generateMfJournalWithGemini({
         ? "（税率が読み取れなかったため仕訳を確認してください）"
         : "";
 
+      // 混在レシートでなくても、単一税率が8%だと確認できているレシート
+      // （例：全品目が軽減税率対象）は、全ブランチに8%扱いを適用する。
+      const singleReceiptRateHint: 8 | 10 | null =
+        !ocr.has_multiple_tax_rates && ocr.tax_breakdown?.length === 1
+          ? ocr.tax_breakdown[0].rate
+          : null;
+
       const memoBase = submissionTimestampLabel.slice(0, 200);
       const memo = taxReviewNote
         ? `${memoBase.slice(0, 200 - taxReviewNote.length)}${taxReviewNote}`.replace(/\s+/g, " ").slice(0, 200)
@@ -591,8 +598,9 @@ export async function generateMfJournalWithGemini({
             accountId: branch.debitor.account_id,
             subAccountId: branch.debitor.sub_account_id,
           });
+          const effectiveRateHint = tax_rate_hint ?? singleReceiptRateHint;
           const debitorTaxId =
-            tax_rate_hint === 8
+            effectiveRateHint === 8
               ? resolveReducedRateTaxId(baseDebitorTaxId) ?? baseDebitorTaxId
               : baseDebitorTaxId;
 
