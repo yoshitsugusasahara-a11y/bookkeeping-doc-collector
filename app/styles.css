@@ -431,6 +431,48 @@ select:disabled {
   color: var(--muted);
 }
 
+.journal-preview {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+/* 幅の広い表はこの中だけを横スクロールさせ、ページ全体は横に伸ばさない */
+.journal-preview-scroll {
+  overflow-x: auto;
+}
+
+.journal-preview-table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  min-width: 460px;
+  width: 100%;
+}
+
+.journal-preview-table th,
+.journal-preview-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.journal-preview-table th {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.journal-preview-table .amount-cell {
+  text-align: right;
+}
+
+.journal-preview-table .branch-end td {
+  border-bottom: 2px solid var(--line);
+}
+
 /* チェックボックスは上の input 共通指定（min-height:44px 等）を打ち消す */
 .checkbox-line {
   align-items: center;

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getMoneyForwardAccounts } from "@/lib/moneyforward/client";
 import { resolveMoneyForwardAccessToken } from "@/lib/moneyforward/connection";
+import { buildClearedMfJournalPreviewFields } from "@/lib/moneyforward/journal-preview";
 import {
   forceSendJournalOnly,
   processSubmissionToMoneyForward,
@@ -652,6 +653,8 @@ export async function updateSubmissionOcrAsAdmin(
       ocr_updated_at: new Date().toISOString(),
       mf_status: "not_sent",
       mf_error: null,
+      // 読み取り結果が変わると予測仕訳も変わるため、保存済みのものを破棄する。
+      ...buildClearedMfJournalPreviewFields(),
     })
     .eq("id", submissionId)
     .eq("customer_account_id", customerId);

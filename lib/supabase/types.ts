@@ -156,6 +156,10 @@ export type Database = {
           ocr_has_multiple_account_candidates: boolean;
           ocr_account_review_reason: string | null;
           ocr_updated_at: string | null;
+          mf_journal_preview: unknown | null;
+          mf_journal_preview_status: string;
+          mf_journal_preview_error: string | null;
+          mf_journal_preview_generated_at: string | null;
           mf_status: MfSubmissionStatus;
           mf_error: string | null;
           mf_journal_id: string | null;
@@ -201,6 +205,10 @@ export type Database = {
           ocr_has_multiple_account_candidates?: boolean;
           ocr_account_review_reason?: string | null;
           ocr_updated_at?: string | null;
+          mf_journal_preview?: unknown | null;
+          mf_journal_preview_status?: string;
+          mf_journal_preview_error?: string | null;
+          mf_journal_preview_generated_at?: string | null;
           mf_status?: MfSubmissionStatus;
           mf_error?: string | null;
           mf_journal_id?: string | null;
@@ -246,6 +254,10 @@ export type Database = {
           ocr_has_multiple_account_candidates?: boolean;
           ocr_account_review_reason?: string | null;
           ocr_updated_at?: string | null;
+          mf_journal_preview?: unknown | null;
+          mf_journal_preview_status?: string;
+          mf_journal_preview_error?: string | null;
+          mf_journal_preview_generated_at?: string | null;
           mf_status?: MfSubmissionStatus;
           mf_error?: string | null;
           mf_journal_id?: string | null;

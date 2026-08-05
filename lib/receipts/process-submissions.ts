@@ -21,6 +21,10 @@ import {
 } from "@/lib/logging/activity-log";
 import { submitReceiptToMoneyForward } from "@/lib/moneyforward/auto-submit";
 import {
+  generateAndStoreMfJournalPreview,
+  type MfJournalPreview,
+} from "@/lib/moneyforward/journal-preview";
+import {
   buildVoucherFileName,
   getExtensionFromMimeType,
 } from "@/lib/moneyforward/client";
@@ -28,7 +32,7 @@ import type { Database } from "@/lib/supabase/types";
 
 const receiptUploadBucket = "receipt_uploads";
 const submissionProcessingColumns =
-  "id, customer_account_id, transaction_note, file_name, mime_type, source_storage_path, submitted_at, drive_file_id, drive_view_url, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_tax_rates, ocr_needs_tax_rate_review, ocr_has_multiple_account_candidates, ocr_account_review_reason, mf_status";
+  "id, customer_account_id, transaction_note, file_name, mime_type, source_storage_path, submitted_at, drive_file_id, drive_view_url, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_tax_rates, ocr_needs_tax_rate_review, ocr_has_multiple_account_candidates, ocr_account_review_reason, mf_journal_preview, mf_journal_preview_status, mf_status";
 
 type SubmissionRow = {
   id: string;
@@ -59,6 +63,8 @@ type SubmissionRow = {
   ocr_needs_tax_rate_review?: boolean;
   ocr_has_multiple_account_candidates?: boolean;
   ocr_account_review_reason?: string | null;
+  mf_journal_preview?: MfJournalPreview | null;
+  mf_journal_preview_status?: string;
   mf_status: string;
 };
 
@@ -674,11 +680,28 @@ export async function processCustomerPendingOcr({
         processed += 1;
         continue;
       }
-      await runOcrForSubmission({
+      const ocr = await runOcrForSubmission({
         supabase,
         submission,
         file,
         customerJournalPrompt: customer.journal_prompt,
+      });
+
+      // 予測仕訳はOCR直後に作って保存する。利用者が履歴画面で内容を確認し、
+      // 承認したものがそのまま送信されるようにするため、送信時には作り直さない。
+      // ここでの失敗はOCRの成功を打ち消さないよう、関数内で状態として記録される。
+      await generateAndStoreMfJournalPreview({
+        supabase,
+        customerAccountId: customerId,
+        submissionId: submission.id,
+        submittedAt: submission.submitted_at,
+        fileName: submission.file_name,
+        mimeType: submission.mime_type,
+        transactionNote: submission.transaction_note,
+        ocr,
+        customerJournalPrompt: customer.journal_prompt,
+        suspenseAccountId: customer.suspense_account_id,
+        suspenseAccountName: customer.suspense_account_name,
       });
       processed += 1;
     } catch (error) {
@@ -740,6 +763,10 @@ export async function forceSendJournalOnly({
       customerJournalPrompt: customer.journal_prompt,
       suspenseAccountId: customer.suspense_account_id,
       suspenseAccountName: customer.suspense_account_name,
+      storedPreview:
+        submission.mf_journal_preview_status === "completed"
+          ? submission.mf_journal_preview ?? null
+          : null,
     });
 
     await logActivity({
@@ -838,6 +865,10 @@ export async function processSubmissionToMoneyForward({
       customerJournalPrompt: customer.journal_prompt,
       suspenseAccountId: customer.suspense_account_id,
       suspenseAccountName: customer.suspense_account_name,
+      storedPreview:
+        submission.mf_journal_preview_status === "completed"
+          ? submission.mf_journal_preview ?? null
+          : null,
     });
 
     // ドライブへのアップロードは一度成功すると再アップロードされないため、

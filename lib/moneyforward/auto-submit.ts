@@ -1,16 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { generateMfJournalWithGemini } from "@/lib/gemini/mf-journal";
 import type { ReceiptOcrResult } from "@/lib/gemini/receipt-ocr";
 import type { Database } from "@/lib/supabase/types";
-import {
-  buildVoucherFileName,
-  getExtensionFromMimeType,
-  getMoneyForwardAccounts,
-  getMoneyForwardTaxes,
-  postMoneyForwardJournal,
-  postMoneyForwardVouchers,
-} from "./client";
+import { postMoneyForwardJournal, postMoneyForwardVouchers } from "./client";
 import { resolveMoneyForwardAccessToken } from "./connection";
+import {
+  generateAndStoreMfJournalPreview,
+  type MfJournalPreview,
+} from "./journal-preview";
 
 function fileToBase64(buffer: ArrayBuffer) {
   return Buffer.from(buffer).toString("base64");
@@ -27,27 +23,6 @@ function extractJournalId(payload: unknown) {
   throw new Error("Money Forward journal response did not include journal ID.");
 }
 
-function formatSubmittedAt(value: string) {
-  return new Intl.DateTimeFormat("ja-JP", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Tokyo",
-  }).format(new Date(value));
-}
-
-function formatSubmittedAtDate(value: string) {
-  const parts = new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(value));
-  const year = parts.find((part) => part.type === "year")?.value ?? "";
-  const month = parts.find((part) => part.type === "month")?.value ?? "";
-  const day = parts.find((part) => part.type === "day")?.value ?? "";
-  return `${year}-${month}-${day}`;
-}
-
 export async function submitReceiptToMoneyForward({
   supabase,
   customerAccountId,
@@ -60,6 +35,7 @@ export async function submitReceiptToMoneyForward({
   customerJournalPrompt = null,
   suspenseAccountId = null,
   suspenseAccountName = null,
+  storedPreview = null,
 }: {
   supabase: SupabaseClient<Database>;
   customerAccountId: string;
@@ -72,6 +48,7 @@ export async function submitReceiptToMoneyForward({
   customerJournalPrompt?: string | null;
   suspenseAccountId?: string | null;
   suspenseAccountName?: string | null;
+  storedPreview?: MfJournalPreview | null;
 }) {
   const accessToken = await resolveMoneyForwardAccessToken({
     supabase,
@@ -89,74 +66,37 @@ export async function submitReceiptToMoneyForward({
     return;
   }
 
-  const accountsResponse = await getMoneyForwardAccounts(accessToken);
-  const accounts = Array.isArray(accountsResponse.accounts)
-    ? accountsResponse.accounts
-    : [];
+  // 画面に表示され、利用者が承認した仕訳をそのまま送るため、保存済みの
+  // 予測仕訳があれば再生成しない。未生成の場合（予測仕訳の導入前に
+  // 取り込まれた資料など）に限り、ここで生成して保存する。
+  const preview =
+    storedPreview ??
+    (await generateAndStoreMfJournalPreview({
+      supabase,
+      customerAccountId,
+      submissionId,
+      submittedAt,
+      fileName: file?.name ?? "receipt",
+      mimeType,
+      transactionNote,
+      ocr,
+      customerJournalPrompt,
+      suspenseAccountId,
+      suspenseAccountName,
+    }));
 
-  // 借方が複数科目に分かれる可能性があるレシートは、科目を自動確定せず
-  // 顧客ごとに設定した仮計上科目へ計上する。設定がない、または設定済みの科目が
-  // MF側で削除されている場合は、誤った科目で計上せずここで送信を止める。
-  let resolvedSuspenseAccountId: string | null = null;
-  if (ocr.has_multiple_account_candidates) {
-    if (!suspenseAccountId) {
-      throw new Error(
-        "複数の勘定科目に分かれる可能性があるレシートですが、仮計上科目が未設定のため送信できません。管理者にご連絡ください。",
-      );
-    }
-
-    const suspenseAccountExists = (
-      accounts as Array<{ id?: unknown }>
-    ).some((account) => account?.id === suspenseAccountId);
-
-    if (!suspenseAccountExists) {
-      throw new Error(
-        `複数の勘定科目に分かれる可能性があるレシートですが、仮計上科目「${suspenseAccountName ?? "未設定"}」がマネーフォワード上に見つかりません。管理者にご連絡ください。`,
-      );
-    }
-
-    resolvedSuspenseAccountId = suspenseAccountId;
-  }
-
-  // 混在レシートに限らず、単一税率が8%のみと判明しているレシートでも
-  // 軽減税率区分への差し替えが必要なため、tax_breakdown に8%が含まれる場合は取得する。
-  const needsTaxLookup =
-    ocr.has_multiple_tax_rates ||
-    (ocr.tax_breakdown?.some((entry) => entry.rate === 8) ?? false);
-
-  let taxes: Array<{ id: string; name?: string; tax_rate?: number }> = [];
-  if (needsTaxLookup) {
-    const taxesResponse = await getMoneyForwardTaxes(accessToken);
-    taxes = Array.isArray(taxesResponse.taxes)
-      ? (taxesResponse.taxes as Array<{ id: string; name?: string; tax_rate?: number }>)
-      : [];
+  if (!preview) {
+    throw new Error(
+      "予測仕訳を作成できなかったため送信できません。履歴画面のエラー内容をご確認ください。",
+    );
   }
 
   const voucherFileName = file
-    ? buildVoucherFileName({
-        date: ocr.date,
-        amount: ocr.amount,
-        isCreditCard: ocr.is_credit_card,
-        extension: getExtensionFromMimeType(mimeType, file.name || "receipt"),
-      })
+    ? preview.display.voucherFileName
     : "証憑ファイル添付なし";
-  const transactionDate = ocr.date || formatSubmittedAtDate(submittedAt);
-  const needsDateConfirmation = !ocr.date;
-  const journal = await generateMfJournalWithGemini({
-    ocr,
-    transactionNote,
-    voucherFileName,
-    transactionDate,
-    needsDateConfirmation,
-    submissionTimestampLabel: formatSubmittedAt(submittedAt),
-    customerJournalPrompt,
-    accounts: accounts as never[],
-    taxes,
-    suspenseAccountId: resolvedSuspenseAccountId,
-  });
   const journalResponse = await postMoneyForwardJournal({
     accessToken,
-    journal,
+    journal: preview.payload,
   });
   const journalId = extractJournalId(journalResponse);
 

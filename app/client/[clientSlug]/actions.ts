@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
+import { buildClearedMfJournalPreviewFields } from "@/lib/moneyforward/journal-preview";
 import { processSubmissionToMoneyForward } from "@/lib/receipts/process-submissions";
 import { createClient } from "@/lib/supabase/server";
 
@@ -145,6 +146,9 @@ export async function updateSubmissionOcr(
       ocr_updated_at: ocrUpdatedAtNow,
       mf_status: "not_sent",
       mf_error: null,
+      // 読み取り結果が変わると予測仕訳も変わるため、保存済みのものを破棄する。
+      // 次のバックグラウンド処理または送信時に作り直される。
+      ...buildClearedMfJournalPreviewFields(),
     })
     .eq("id", submissionId)
     .eq("customer_account_id", account.id);

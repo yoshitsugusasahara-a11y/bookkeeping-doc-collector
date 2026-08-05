@@ -11,7 +11,9 @@ import {
   Settings,
 } from "lucide-react";
 import { DeleteSubmissionButton } from "@/components/delete-submission-button";
+import { JournalPreviewTable } from "@/components/journal-preview-table";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
+import type { MfJournalPreview } from "@/lib/moneyforward/journal-preview";
 import { createClient } from "@/lib/supabase/server";
 import {
   hideSubmissionAsCustomer,
@@ -141,7 +143,7 @@ export default async function ClientSubmissionsPage({
   let submissionQuery = supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_account_candidates, ocr_account_review_reason, ocr_updated_at, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_account_candidates, ocr_account_review_reason, ocr_updated_at, mf_journal_preview, mf_journal_preview_status, mf_journal_preview_error, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", account.id)
     .is("hidden_at", null)
@@ -424,6 +426,16 @@ export default async function ClientSubmissionsPage({
                       </dd>
                     </div>
                   </dl>
+
+                  <JournalPreviewTable
+                    preview={
+                      (item.mf_journal_preview as MfJournalPreview | null) ??
+                      null
+                    }
+                    status={item.mf_journal_preview_status}
+                    error={item.mf_journal_preview_error}
+                    isSent={isSent}
+                  />
 
                   <div className="action-row">
                     <MoneyForwardSendButton
