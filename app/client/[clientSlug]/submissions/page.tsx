@@ -14,12 +14,19 @@ import { DeleteSubmissionButton } from "@/components/delete-submission-button";
 import { JournalPreviewTable } from "@/components/journal-preview-table";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import type { MfJournalPreview } from "@/lib/moneyforward/journal-preview";
+import { resolveSendMode } from "@/lib/receipts/send-mode";
 import { createClient } from "@/lib/supabase/server";
 import {
   hideSubmissionAsCustomer,
   logoutClient,
   sendSubmissionToMoneyForward,
 } from "../actions";
+import {
+  ApprovalButton,
+  ApprovalSelectionProvider,
+  BulkApprovalBar,
+  SubmissionSelectCheckbox,
+} from "./approval-controls";
 import { OcrEditForm } from "./ocr-edit-form";
 import { MoneyForwardSendButton } from "./submission-actions";
 
@@ -127,7 +134,9 @@ export default async function ClientSubmissionsPage({
 
   const { data: account } = await supabase
     .from("customer_accounts")
-    .select("id, approval_status, submission_retention_limit")
+    .select(
+      "id, approval_status, submission_retention_limit, auto_send_enabled, skip_approval",
+    )
     .eq("user_id", user.id)
     .eq("client_slug", clientSlug)
     .maybeSingle();
@@ -143,7 +152,7 @@ export default async function ClientSubmissionsPage({
   let submissionQuery = supabase
     .from("submissions")
     .select(
-      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_account_candidates, ocr_account_review_reason, ocr_updated_at, mf_journal_preview, mf_journal_preview_status, mf_journal_preview_error, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
+      "id, transaction_note, file_name, mime_type, file_size, drive_view_url, thumbnail_url, submitted_at, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_error, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_account_candidates, ocr_account_review_reason, ocr_updated_at, mf_journal_preview, mf_journal_preview_status, mf_journal_preview_error, approved_at, mf_status, mf_error, mf_journal_id, mf_voucher_file_id, mf_sent_at",
     )
     .eq("customer_account_id", account.id)
     .is("hidden_at", null)
@@ -195,8 +204,16 @@ export default async function ClientSubmissionsPage({
       .eq("customer_account_id", account.id),
   ]);
   const retentionLimit = account.submission_retention_limit || 200;
+  const sendMode = resolveSendMode(account);
+  // 一括操作の対象は、OCRが完了していてまだ送信されていないもの。
+  const selectableIds = submissions
+    .filter(
+      (item) => item.ocr_status === "completed" && item.mf_status !== "sent",
+    )
+    .map((item) => item.id);
 
   return (
+    <ApprovalSelectionProvider>
     <main className="app-frame">
       <header className="topbar">
         <div>
@@ -275,6 +292,14 @@ export default async function ClientSubmissionsPage({
         </section>
       )}
 
+      {sendMode !== "auto" && selectableIds.length > 0 && (
+        <BulkApprovalBar
+          clientSlug={clientSlug}
+          action={sendMode === "approval" ? "approve" : "send"}
+          selectableIds={selectableIds}
+        />
+      )}
+
       <section className="history-list" aria-label="送信済み資料">
         {submissions.length === 0 && (
           <div className="empty-state">
@@ -331,6 +356,11 @@ export default async function ClientSubmissionsPage({
                   <div className="status-line">
                     <span>{getOcrStatusLabel(item.ocr_status)}</span>
                     <span>{getMfStatusLabel(item.mf_status)}</span>
+                    {sendMode === "approval" && !isSent && (
+                      <span>
+                        {item.approved_at ? "承認済み（送信待ち）" : "未承認"}
+                      </span>
+                    )}
                   </div>
 
                   <dl className="ocr-summary compact-summary">
@@ -438,12 +468,27 @@ export default async function ClientSubmissionsPage({
                   />
 
                   <div className="action-row">
-                    <MoneyForwardSendButton
-                      clientSlug={clientSlug}
-                      submissionId={item.id}
-                      disabled={!canSendToMf}
-                      completed={isSent}
-                    />
+                    {sendMode === "approval" ? (
+                      <ApprovalButton
+                        clientSlug={clientSlug}
+                        submissionId={item.id}
+                        approvedAt={item.approved_at}
+                        disabled={!canSendToMf}
+                      />
+                    ) : (
+                      <MoneyForwardSendButton
+                        clientSlug={clientSlug}
+                        submissionId={item.id}
+                        disabled={!canSendToMf}
+                        completed={isSent}
+                      />
+                    )}
+                    {canSendToMf && sendMode !== "auto" && (
+                      <SubmissionSelectCheckbox
+                        submissionId={item.id}
+                        label={`${item.file_name} をまとめて操作する対象にする`}
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -465,5 +510,6 @@ export default async function ClientSubmissionsPage({
         })}
       </section>
     </main>
+    </ApprovalSelectionProvider>
   );
 }

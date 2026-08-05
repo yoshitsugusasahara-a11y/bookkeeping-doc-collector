@@ -28,6 +28,7 @@ import {
   buildVoucherFileName,
   getExtensionFromMimeType,
 } from "@/lib/moneyforward/client";
+import { resolveSendMode } from "@/lib/receipts/send-mode";
 import type { Database } from "@/lib/supabase/types";
 
 const receiptUploadBucket = "receipt_uploads";
@@ -1059,13 +1060,35 @@ export async function processCustomerPendingSubmissions({
   limit?: number;
   source?: ActivitySource | null;
 }) {
-  const { data: submissions, error } = await supabase
+  // 自動送信の可否は顧客ごとの設定で決まる。既定（manual）では自動送信を行わず、
+  // 利用者が資料ごとに送信を指示したときだけ送る。
+  const { data: sendSettings, error: sendSettingsError } = await supabase
+    .from("customer_accounts")
+    .select("auto_send_enabled, skip_approval")
+    .eq("id", customerId)
+    .maybeSingle();
+
+  if (sendSettingsError) throw sendSettingsError;
+
+  const sendMode = resolveSendMode(sendSettings ?? {});
+  if (sendMode === "manual") {
+    return { processed: 0, failed: 0, errors: [], skippedByMode: true };
+  }
+
+  let submissionQuery = supabase
     .from("submissions")
-    .select("id")
+    .select("id, approved_at")
     .eq("customer_account_id", customerId)
     .neq("mf_status", "sent")
     .not("source_storage_path", "is", null)
-    .is("hidden_at", null)
+    .is("hidden_at", null);
+
+  // 承認が必要なモードでは、承認済みの資料だけを自動送信の対象にする。
+  if (sendMode === "approval") {
+    submissionQuery = submissionQuery.not("approved_at", "is", null);
+  }
+
+  const { data: submissions, error } = await submissionQuery
     .order("submitted_at", { ascending: true })
     .limit(limit);
 
@@ -1092,5 +1115,5 @@ export async function processCustomerPendingSubmissions({
     }
   }
 
-  return { processed, failed: errors.length, errors };
+  return { processed, failed: errors.length, errors, skippedByMode: false };
 }

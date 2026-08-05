@@ -45,7 +45,92 @@ async function getApprovedClientAccount(clientSlug: string) {
     redirect(`/client/${clientSlug}/pending`);
   }
 
-  return { supabase, account };
+  return { supabase, account, user };
+}
+
+/**
+ * 自動送信のON/OFF。承認は引き続き必要なので、管理者が代理で設定してもよい。
+ */
+export async function updateAutoSendEnabled(
+  clientSlug: string,
+  enabled: boolean,
+): Promise<{ status: "success" | "error"; message?: string }> {
+  const { supabase, account } = await getApprovedClientAccount(clientSlug);
+
+  const { error } = await supabase
+    .from("customer_accounts")
+    .update(
+      enabled
+        ? { auto_send_enabled: true }
+        : // 自動送信を止めるときは、承認スキップの同意も併せて解除する。
+          // 再度自動送信を有効にした際に、同意なしでスキップが復活しないようにするため。
+          {
+            auto_send_enabled: false,
+            skip_approval: false,
+            skip_approval_consented_at: null,
+            skip_approval_consented_by: null,
+          },
+    )
+    .eq("id", account.id);
+
+  if (error) {
+    console.error("Failed to update auto send setting", error);
+    return { status: "error", message: "設定を保存できませんでした。" };
+  }
+
+  revalidatePath(`/client/${clientSlug}/settings`);
+  revalidatePath(`/client/${clientSlug}/submissions`);
+  return { status: "success" };
+}
+
+/**
+ * 承認のスキップ。利用者本人がMF上で修正することを引き受ける選択なので、
+ * 顧客画面からのみ設定でき、同意した本人と日時を記録する。
+ */
+export async function updateSkipApproval(
+  clientSlug: string,
+  skip: boolean,
+): Promise<{ status: "success" | "error"; message?: string }> {
+  const { supabase, account, user } = await getApprovedClientAccount(clientSlug);
+
+  const { data: current } = await supabase
+    .from("customer_accounts")
+    .select("auto_send_enabled")
+    .eq("id", account.id)
+    .maybeSingle();
+
+  if (skip && !current?.auto_send_enabled) {
+    return {
+      status: "error",
+      message: "先に自動送信を有効にしてください。",
+    };
+  }
+
+  const { error } = await supabase
+    .from("customer_accounts")
+    .update(
+      skip
+        ? {
+            skip_approval: true,
+            skip_approval_consented_at: new Date().toISOString(),
+            skip_approval_consented_by: user.id,
+          }
+        : {
+            skip_approval: false,
+            skip_approval_consented_at: null,
+            skip_approval_consented_by: null,
+          },
+    )
+    .eq("id", account.id);
+
+  if (error) {
+    console.error("Failed to update skip approval setting", error);
+    return { status: "error", message: "設定を保存できませんでした。" };
+  }
+
+  revalidatePath(`/client/${clientSlug}/settings`);
+  revalidatePath(`/client/${clientSlug}/submissions`);
+  return { status: "success" };
 }
 
 function parseAmount(value: FormDataEntryValue | null) {
@@ -188,6 +273,49 @@ export async function updateSubmissionOcr(
   };
 }
 
+/**
+ * 資料を承認する（自動送信＋承認モードでの送信対象にする）。
+ * 誰がいつ承認したかを記録し、送信済みの仕訳の根拠として残す。
+ */
+export async function setSubmissionApproval(
+  clientSlug: string,
+  submissionIds: string[],
+  approved: boolean,
+): Promise<{ status: "success" | "error"; message?: string; count?: number }> {
+  const targetIds = submissionIds.filter(Boolean);
+  if (targetIds.length === 0) {
+    return { status: "error", message: "対象の資料を確認できませんでした。" };
+  }
+
+  const { supabase, account, user } = await getApprovedClientAccount(clientSlug);
+
+  const { data, error } = await supabase
+    .from("submissions")
+    .update(
+      approved
+        ? {
+            approved_at: new Date().toISOString(),
+            approved_by_user_id: user.id,
+          }
+        : { approved_at: null, approved_by_user_id: null },
+    )
+    .in("id", targetIds)
+    .eq("customer_account_id", account.id)
+    .neq("mf_status", "sent")
+    .select("id");
+
+  if (error) {
+    console.error("Failed to update submission approval", error);
+    return {
+      status: "error",
+      message: "承認状態を保存できませんでした。時間をおいて再度お試しください。",
+    };
+  }
+
+  revalidatePath(`/client/${clientSlug}/submissions`);
+  return { status: "success", count: data?.length ?? 0 };
+}
+
 export async function sendSubmissionToMoneyForward(
   clientSlug: string,
   submissionId: string,
@@ -196,9 +324,21 @@ export async function sendSubmissionToMoneyForward(
     return { status: "error", message: "対象の資料を確認できませんでした。" };
   }
 
-  const { supabase, account } = await getApprovedClientAccount(clientSlug);
+  const { supabase, account, user } = await getApprovedClientAccount(clientSlug);
 
   try {
+    // 送信ボタンを押す行為そのものが承認にあたるため、送信前に記録しておく。
+    // 送信が失敗しても、利用者が内容を承認した事実は残る。
+    await supabase
+      .from("submissions")
+      .update({
+        approved_at: new Date().toISOString(),
+        approved_by_user_id: user.id,
+      })
+      .eq("id", submissionId)
+      .eq("customer_account_id", account.id)
+      .is("approved_at", null);
+
     await processSubmissionToMoneyForward({
       supabase,
       customerId: account.id,

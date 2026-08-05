@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/logging/activity-log";
-import { processCustomerPendingSubmissions } from "@/lib/receipts/process-submissions";
+import {
+  processCustomerPendingJournalPreviews,
+  processCustomerPendingSubmissions,
+} from "@/lib/receipts/process-submissions";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const activityLogRetentionDays = 30;
@@ -59,6 +62,18 @@ export async function GET(request: Request) {
 
     for (const customer of customers ?? []) {
       try {
+        // 自動送信しない顧客でも予測仕訳は必要なため、送信の可否に関わらず
+        // 未生成分を作り直す。アップロード直後の生成が失敗した場合の受け皿。
+        try {
+          await processCustomerPendingJournalPreviews({
+            supabase,
+            customerId: customer.id,
+            limit: 5,
+          });
+        } catch (previewError) {
+          console.error("Cron: failed to rebuild journal previews", previewError);
+        }
+
         const result = await processCustomerPendingSubmissions({
           supabase,
           customerId: customer.id,

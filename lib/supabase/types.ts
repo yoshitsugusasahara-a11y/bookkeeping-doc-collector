@@ -50,6 +50,10 @@ export type Database = {
           journal_prompt: string | null;
           suspense_account_id: string | null;
           suspense_account_name: string | null;
+          auto_send_enabled: boolean;
+          skip_approval: boolean;
+          skip_approval_consented_at: string | null;
+          skip_approval_consented_by: string | null;
           submission_retention_limit: number;
           approved_at: string | null;
           created_at: string;
@@ -70,6 +74,10 @@ export type Database = {
           journal_prompt?: string | null;
           suspense_account_id?: string | null;
           suspense_account_name?: string | null;
+          auto_send_enabled?: boolean;
+          skip_approval?: boolean;
+          skip_approval_consented_at?: string | null;
+          skip_approval_consented_by?: string | null;
           submission_retention_limit?: number;
           approved_at?: string | null;
           created_at?: string;
@@ -90,6 +98,10 @@ export type Database = {
           journal_prompt?: string | null;
           suspense_account_id?: string | null;
           suspense_account_name?: string | null;
+          auto_send_enabled?: boolean;
+          skip_approval?: boolean;
+          skip_approval_consented_at?: string | null;
+          skip_approval_consented_by?: string | null;
           submission_retention_limit?: number;
           approved_at?: string | null;
           created_at?: string;
@@ -160,6 +172,8 @@ export type Database = {
           mf_journal_preview_status: string;
           mf_journal_preview_error: string | null;
           mf_journal_preview_generated_at: string | null;
+          approved_at: string | null;
+          approved_by_user_id: string | null;
           mf_status: MfSubmissionStatus;
           mf_error: string | null;
           mf_journal_id: string | null;
@@ -209,6 +223,8 @@ export type Database = {
           mf_journal_preview_status?: string;
           mf_journal_preview_error?: string | null;
           mf_journal_preview_generated_at?: string | null;
+          approved_at?: string | null;
+          approved_by_user_id?: string | null;
           mf_status?: MfSubmissionStatus;
           mf_error?: string | null;
           mf_journal_id?: string | null;
@@ -258,6 +274,8 @@ export type Database = {
           mf_journal_preview_status?: string;
           mf_journal_preview_error?: string | null;
           mf_journal_preview_generated_at?: string | null;
+          approved_at?: string | null;
+          approved_by_user_id?: string | null;
           mf_status?: MfSubmissionStatus;
           mf_error?: string | null;
           mf_journal_id?: string | null;

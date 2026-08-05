@@ -334,6 +334,53 @@ export async function updateCustomerSuspenseAccount(
   };
 }
 
+/**
+ * 自動送信のON/OFF。承認は引き続き必要なので管理者からも設定できる。
+ * 承認そのものを省略する設定は、利用者本人の同意が必要なため顧客画面のみ。
+ */
+export async function updateCustomerAutoSend(
+  customerId: string,
+  enabled: boolean,
+): Promise<{ status: "success" | "error"; message: string }> {
+  if (!customerId) {
+    return { status: "error", message: "顧客情報を取得できませんでした。" };
+  }
+
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  const { error } = await supabase
+    .from("customer_accounts")
+    .update(
+      enabled
+        ? { auto_send_enabled: true }
+        : {
+            auto_send_enabled: false,
+            skip_approval: false,
+            skip_approval_consented_at: null,
+            skip_approval_consented_by: null,
+          },
+    )
+    .eq("id", customerId);
+
+  if (error) {
+    return {
+      status: "error",
+      message: `設定を保存できませんでした。${getErrorMessage(error)}`,
+    };
+  }
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  return {
+    status: "success",
+    message: enabled
+      ? "自動送信を有効にしました。"
+      : "自動送信を無効にしました。",
+  };
+}
+
 export async function updateCustomerRetentionSettings(
   _prevState: RetentionSettingsState,
   formData: FormData,

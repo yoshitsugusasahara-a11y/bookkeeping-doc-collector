@@ -12,6 +12,7 @@ import {
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { logoutClient } from "../actions";
+import { SendModeForm } from "./send-mode-form";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "未取得";
@@ -39,7 +40,9 @@ export default async function ClientSettingsPage({
 
   const { data: account } = await supabase
     .from("customer_accounts")
-    .select("id, customer_name, approval_status")
+    .select(
+      "id, customer_name, approval_status, auto_send_enabled, skip_approval, skip_approval_consented_at",
+    )
     .eq("user_id", user.id)
     .eq("client_slug", clientSlug)
     .maybeSingle();
@@ -111,6 +114,22 @@ export default async function ClientSettingsPage({
           <span>マネーフォワード連携に失敗しました。時間をおいて再度お試しください。</span>
         </section>
       )}
+
+      <section className="settings-panel">
+        <div>
+          <p className="eyebrow">Send Mode</p>
+          <h2>仕訳の送信方法</h2>
+          <p className="muted">
+            本サービスは記帳を代行するものではなく、AIが作成した仕訳を参考情報としてご提供するものです。最終的な勘定科目の判断はお客様にお任せしています。
+          </p>
+        </div>
+        <SendModeForm
+          clientSlug={clientSlug}
+          autoSendEnabled={account.auto_send_enabled}
+          skipApproval={account.skip_approval}
+          skipApprovalConsentedAt={account.skip_approval_consented_at}
+        />
+      </section>
 
       <section className="settings-panel">
         <div className="section-heading">
