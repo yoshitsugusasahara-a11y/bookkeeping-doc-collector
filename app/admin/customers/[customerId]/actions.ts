@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { getMoneyForwardAccounts } from "@/lib/moneyforward/client";
 import { resolveMoneyForwardAccessToken } from "@/lib/moneyforward/connection";
 import { buildClearedMfJournalPreviewFields } from "@/lib/moneyforward/journal-preview";
 import {
   forceSendJournalOnly,
+  processCustomerPendingJournalPreviews,
   processSubmissionToMoneyForward,
 } from "@/lib/receipts/process-submissions";
 import {
@@ -668,5 +670,18 @@ export async function updateSubmissionOcrAsAdmin(
   }
 
   revalidatePath(`/admin/customers/${customerId}`);
+
+  // 破棄した予測仕訳を、修正後の読み取り結果で作り直す。
+  after(async () => {
+    try {
+      await processCustomerPendingJournalPreviews({
+        supabase,
+        customerId,
+      });
+    } catch (previewError) {
+      console.error("Failed to rebuild journal preview", previewError);
+    }
+  });
+
   return { status: "success", message: "OCR結果を保存しました。" };
 }

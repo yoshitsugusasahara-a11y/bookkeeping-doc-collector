@@ -2,9 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { buildClearedMfJournalPreviewFields } from "@/lib/moneyforward/journal-preview";
-import { processSubmissionToMoneyForward } from "@/lib/receipts/process-submissions";
+import {
+  processCustomerPendingJournalPreviews,
+  processSubmissionToMoneyForward,
+} from "@/lib/receipts/process-submissions";
 import { createClient } from "@/lib/supabase/server";
 
 export type OcrUpdateState = {
@@ -164,6 +168,19 @@ export async function updateSubmissionOcr(
   }
 
   revalidatePath(`/client/${clientSlug}/submissions`);
+
+  // 破棄した予測仕訳を、修正後の読み取り結果で作り直す。
+  after(async () => {
+    try {
+      await processCustomerPendingJournalPreviews({
+        supabase,
+        customerId: account.id,
+      });
+    } catch (previewError) {
+      console.error("Failed to rebuild journal preview", previewError);
+    }
+  });
+
   return {
     status: "success",
     message: "OCR結果を保存しました。",

@@ -718,6 +718,66 @@ export async function processCustomerPendingOcr({
     }
   }
 
+  await processCustomerPendingJournalPreviews({ supabase, customerId });
+
+  return processed;
+}
+
+/**
+ * 予測仕訳が未生成・生成失敗のまま残っている資料を拾って作り直す。
+ *
+ * OCR結果が編集されると保存済みの予測仕訳は破棄されるが、そのとき
+ * ocr_status は completed のままなので、OCR待ちを対象とする通常の
+ * バックグラウンド処理では拾われない。この関数がその穴を埋める。
+ */
+export async function processCustomerPendingJournalPreviews({
+  supabase,
+  customerId,
+  limit = 20,
+}: {
+  supabase: SupabaseClient<Database>;
+  customerId: string;
+  limit?: number;
+}) {
+  const { data: submissions, error } = await supabase
+    .from("submissions")
+    .select(submissionProcessingColumns)
+    .eq("customer_account_id", customerId)
+    .eq("ocr_status", "completed")
+    .neq("mf_status", "sent")
+    .in("mf_journal_preview_status", ["pending", "failed"])
+    .is("hidden_at", null)
+    .order("submitted_at", { ascending: true })
+    .limit(limit);
+
+  if (error) throw error;
+
+  const rows = (submissions ?? []) as SubmissionRow[];
+  if (rows.length === 0) return 0;
+
+  const customer = await getCustomerDriveSettings({ supabase, customerId });
+
+  let processed = 0;
+  for (const submission of rows) {
+    const ocr = getCompletedOcr(submission);
+    if (!ocr) continue;
+
+    await generateAndStoreMfJournalPreview({
+      supabase,
+      customerAccountId: customerId,
+      submissionId: submission.id,
+      submittedAt: submission.submitted_at,
+      fileName: submission.file_name,
+      mimeType: submission.mime_type,
+      transactionNote: submission.transaction_note,
+      ocr,
+      customerJournalPrompt: customer.journal_prompt,
+      suspenseAccountId: customer.suspense_account_id,
+      suspenseAccountName: customer.suspense_account_name,
+    });
+    processed += 1;
+  }
+
   return processed;
 }
 

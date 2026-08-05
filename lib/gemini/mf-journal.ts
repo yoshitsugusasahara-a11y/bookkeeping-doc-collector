@@ -46,6 +46,7 @@ export type MfTaxOption = {
 type AccountTaxLookup = {
   accountTaxById: Map<string, string | null>;
   subAccountTaxById: Map<string, string | null>;
+  subAccountParentById: Map<string, string>;
 };
 
 type RawBranchWithHint = {
@@ -80,6 +81,7 @@ type ParsedBranch = {
 function buildAccountTaxLookup(accounts: MfAccountOption[]): AccountTaxLookup {
   const accountTaxById = new Map<string, string | null>();
   const subAccountTaxById = new Map<string, string | null>();
+  const subAccountParentById = new Map<string, string>();
 
   for (const account of accounts) {
     if (typeof account.id === "string") {
@@ -88,11 +90,48 @@ function buildAccountTaxLookup(accounts: MfAccountOption[]): AccountTaxLookup {
     for (const subAccount of account.sub_accounts ?? []) {
       if (typeof subAccount.id === "string") {
         subAccountTaxById.set(subAccount.id, subAccount.tax_id ?? null);
+        if (typeof account.id === "string") {
+          subAccountParentById.set(subAccount.id, account.id);
+        }
       }
     }
   }
 
-  return { accountTaxById, subAccountTaxById };
+  return { accountTaxById, subAccountTaxById, subAccountParentById };
+}
+
+// Gemini は「利用可能なIDだけを使う」よう指示しても、実在しない勘定科目IDを
+// それらしい形式で作ってしまうことがある。そのまま送ると MF が
+// invalid_request_body_value で拒否するため、送信前にマスタと突き合わせる。
+function findUnknownAccountId(
+  branches: ParsedBranch[],
+  lookup: AccountTaxLookup,
+): string | null {
+  for (const branch of branches) {
+    for (const line of [branch.debitor, branch.creditor]) {
+      if (!lookup.accountTaxById.has(line.account_id)) {
+        return line.account_id;
+      }
+    }
+  }
+  return null;
+}
+
+// 補助科目は必須ではないため、実在しない・親科目が一致しない場合は
+// 仕訳全体を失敗させず、補助科目の指定だけを落とす。
+function sanitizeSubAccountId({
+  lookup,
+  accountId,
+  subAccountId,
+}: {
+  lookup: AccountTaxLookup;
+  accountId: string;
+  subAccountId: string | null;
+}): string | null {
+  if (!subAccountId) return null;
+  if (!lookup.subAccountTaxById.has(subAccountId)) return null;
+  if (lookup.subAccountParentById.get(subAccountId) !== accountId) return null;
+  return subAccountId;
 }
 
 // 補助科目が指定されていればその税区分を優先し、なければ勘定科目の税区分を採用する。
@@ -542,6 +581,15 @@ export async function generateMfJournalWithGemini({
       }
 
       const journal = normalizeJournalPayload(JSON.parse(extractJson(text)));
+
+      // 実在しない勘定科目IDが返ってきた場合は、この試行を失敗として扱い
+      // 次の試行（別モデルを含む）へ回す。そのまま返すとMFに拒否される。
+      const unknownAccountId = findUnknownAccountId(journal.branches, taxLookup);
+      if (unknownAccountId) {
+        lastError = `Gemini returned an account_id that does not exist in the Money Forward master: ${unknownAccountId}`;
+        continue;
+      }
+
       const remark = buildRemark({ ocr, transactionNote, voucherFileName });
       const hasCustomerPrompt =
         typeof customerJournalPrompt === "string" &&
@@ -634,7 +682,16 @@ export async function generateMfJournalWithGemini({
             resolvedSuspenseAccountId ?? branch.debitor.account_id;
           const debitorSubAccountId = useSuspenseAccount
             ? null
-            : branch.debitor.sub_account_id;
+            : sanitizeSubAccountId({
+                lookup: taxLookup,
+                accountId: debitorAccountId,
+                subAccountId: branch.debitor.sub_account_id,
+              });
+          const creditorSubAccountId = sanitizeSubAccountId({
+            lookup: taxLookup,
+            accountId: branch.creditor.account_id,
+            subAccountId: branch.creditor.sub_account_id,
+          });
 
           // まずマスタのデフォルト税区分ID（通常は標準10%側）を取得し、
           // 軽減税率ブランチについては同じ系統の8%区分が見つかればそちらに差し替える。
@@ -661,10 +718,11 @@ export async function generateMfJournalWithGemini({
             },
             creditor: {
               ...branch.creditor,
+              sub_account_id: creditorSubAccountId,
               tax_id: resolveMasterTaxId({
                 lookup: taxLookup,
                 accountId: branch.creditor.account_id,
-                subAccountId: branch.creditor.sub_account_id,
+                subAccountId: creditorSubAccountId,
               }),
             },
           };
