@@ -141,8 +141,14 @@ export async function submitReceiptToMoneyForward({
     ? accountsResponse.accounts
     : [];
 
+  // 混在レシートに限らず、単一税率が8%のみと判明しているレシートでも
+  // 軽減税率区分への差し替えが必要なため、tax_breakdown に8%が含まれる場合は取得する。
+  const needsTaxLookup =
+    ocr.has_multiple_tax_rates ||
+    (ocr.tax_breakdown?.some((entry) => entry.rate === 8) ?? false);
+
   let taxes: Array<{ id: string; name?: string; tax_rate?: number }> = [];
-  if (ocr.has_multiple_tax_rates) {
+  if (needsTaxLookup) {
     const taxesResponse = await getMoneyForwardTaxes(accessToken);
     taxes = Array.isArray(taxesResponse.taxes)
       ? (taxesResponse.taxes as Array<{ id: string; name?: string; tax_rate?: number }>)
