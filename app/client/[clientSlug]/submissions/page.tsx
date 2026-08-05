@@ -292,10 +292,11 @@ export default async function ClientSubmissionsPage({
         </section>
       )}
 
-      {sendMode !== "auto" && selectableIds.length > 0 && (
+      {/* 一括操作は承認モードのみ。都度送信モードで一括送信を許すと、
+          内容を確認せずまとめて送れてしまい、既定モードの意味がなくなる。 */}
+      {sendMode === "approval" && selectableIds.length > 0 && (
         <BulkApprovalBar
           clientSlug={clientSlug}
-          action={sendMode === "approval" ? "approve" : "send"}
           selectableIds={selectableIds}
         />
       )}
@@ -483,10 +484,10 @@ export default async function ClientSubmissionsPage({
                         completed={isSent}
                       />
                     )}
-                    {canSendToMf && sendMode !== "auto" && (
+                    {canSendToMf && sendMode === "approval" && (
                       <SubmissionSelectCheckbox
                         submissionId={item.id}
-                        label={`${item.file_name} をまとめて操作する対象にする`}
+                        label={`${item.file_name} をまとめて承認する対象にする`}
                       />
                     )}
                   </div>

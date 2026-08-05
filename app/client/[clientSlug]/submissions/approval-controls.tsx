@@ -1,8 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import { Check, Loader2, Send, Undo2 } from "lucide-react";
-import { sendSubmissionToMoneyForward, setSubmissionApproval } from "../actions";
+import { Check, Loader2, Undo2 } from "lucide-react";
+import { setSubmissionApproval } from "../actions";
 
 type SelectionValue = {
   selectedIds: string[];
@@ -134,24 +134,21 @@ export function ApprovalButton({
   );
 }
 
-type BulkAction = "approve" | "send";
-
 /**
- * 選択した資料をまとめて処理する。
- * 承認モードでは一括承認、それ以外（都度送信）では一括送信を行う。
+ * 選択した資料をまとめて承認する。
+ *
+ * 一括操作は承認モードでのみ提供する。都度送信モードで一括送信を許すと、
+ * 内容を確認しないまま一度に送れてしまい、既定を都度送信にしている意味がなくなる。
  */
 export function BulkApprovalBar({
   clientSlug,
-  action,
   selectableIds,
 }: {
   clientSlug: string;
-  action: BulkAction;
   selectableIds: string[];
 }) {
   const { selectedIds, selectAll } = useSelection();
   const [isRunning, setIsRunning] = useState(false);
-  const [progress, setProgress] = useState<string | null>(null);
 
   const allSelected =
     selectableIds.length > 0 &&
@@ -160,42 +157,25 @@ export function BulkApprovalBar({
   async function handleRun() {
     if (isRunning || selectedIds.length === 0) return;
 
-    const confirmMessage =
-      action === "approve"
-        ? `選択した${selectedIds.length}件を承認します。承認した仕訳はマネーフォワードへ送信されます。よろしいですか？`
-        : `選択した${selectedIds.length}件をマネーフォワードへ送信します。よろしいですか？`;
-    if (!window.confirm(confirmMessage)) return;
+    if (
+      !window.confirm(
+        `選択した${selectedIds.length}件を承認します。承認した仕訳はマネーフォワードへ送信されます。よろしいですか？`,
+      )
+    ) {
+      return;
+    }
 
     setIsRunning(true);
-    setProgress(null);
 
     try {
-      if (action === "approve") {
-        const result = await setSubmissionApproval(clientSlug, selectedIds, true);
-        if (result.status === "error") {
-          window.alert(result.message ?? "承認できませんでした。");
-          return;
-        }
-        window.location.reload();
+      const result = await setSubmissionApproval(clientSlug, selectedIds, true);
+      if (result.status === "error") {
+        window.alert(result.message ?? "承認できませんでした。");
         return;
       }
-
-      // 送信はMFへの通信を伴うため1件ずつ行い、途中経過を表示する。
-      let success = 0;
-      let failed = 0;
-      for (const [index, submissionId] of selectedIds.entries()) {
-        setProgress(`送信中 ${index + 1}/${selectedIds.length}`);
-        const result = await sendSubmissionToMoneyForward(
-          clientSlug,
-          submissionId,
-        );
-        if (result.status === "success") success += 1;
-        else failed += 1;
-      }
-      setProgress(`成功${success}件 / 失敗${failed}件`);
-      setTimeout(() => window.location.reload(), 1200);
+      window.location.reload();
     } catch (error) {
-      console.error("Bulk action failed", error);
+      console.error("Bulk approval failed", error);
       window.alert("処理中にエラーが発生しました。");
     } finally {
       setIsRunning(false);
@@ -224,20 +204,13 @@ export function BulkApprovalBar({
       >
         {isRunning ? (
           <Loader2 className="spin-icon" size={18} />
-        ) : action === "approve" ? (
-          <Check size={18} />
         ) : (
-          <Send size={18} />
+          <Check size={18} />
         )}
         <span>
-          {isRunning
-            ? progress ?? "処理中"
-            : action === "approve"
-              ? `選択した${selectedIds.length}件を承認`
-              : `選択した${selectedIds.length}件を送信`}
+          {isRunning ? "承認中" : `選択した${selectedIds.length}件を承認`}
         </span>
       </button>
-      {progress && !isRunning && <small className="muted">{progress}</small>}
     </div>
   );
 }
