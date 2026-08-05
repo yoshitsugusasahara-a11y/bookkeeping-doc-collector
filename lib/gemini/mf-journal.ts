@@ -560,27 +560,28 @@ export async function generateMfJournalWithGemini({
         ? "（税率が読み取れなかったため仕訳を確認してください）"
         : "";
 
+      const memoBase = submissionTimestampLabel.slice(0, 200);
+      const memo = taxReviewNote
+        ? `${memoBase.slice(0, 200 - taxReviewNote.length)}${taxReviewNote}`.replace(/\s+/g, " ").slice(0, 200)
+        : memoBase;
+
       return {
         ...journal,
         transaction_date: transactionDate,
-        memo: submissionTimestampLabel.slice(0, 200),
+        memo,
         tags: normalizeTags({
           tags: journal.tags || [],
           allowAdditionalTags: hasCustomerPrompt,
           requiredTags,
         }),
         branches: journal.branches.map(({ tax_rate_hint, ...branch }) => {
-          const baseRemark = hasCustomerPrompt
+          const finalRemark = hasCustomerPrompt
             ? ensureVoucherFileNameInRemark({
                 remark: branch.remark,
                 fallbackRemark: remark,
                 voucherFileName,
               })
             : remark;
-
-          const finalRemark = taxReviewNote
-            ? `${baseRemark.slice(0, 200 - taxReviewNote.length)}${taxReviewNote}`.replace(/\s+/g, " ").slice(0, 200)
-            : baseRemark;
 
           // まずマスタのデフォルト税区分ID（通常は標準10%側）を取得し、
           // 軽減税率ブランチについては同じ系統の8%区分が見つかればそちらに差し替える。
