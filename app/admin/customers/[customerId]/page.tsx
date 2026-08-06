@@ -28,6 +28,7 @@ import { SuspenseAccountForm } from "./suspense-account-form";
 import { ForceSendActionBar } from "./force-send-action-bar";
 import { JournalPromptForm } from "./journal-prompt-form";
 import { MfProcessForm } from "./mf-process-form";
+import { RerunOcrButton } from "./rerun-ocr-button";
 import { RetentionSettingsForm } from "./retention-settings-form";
 import { SubmissionCheckbox } from "./submission-checkbox";
 import { SubmissionSelectionProvider } from "./submission-selection-context";
@@ -869,6 +870,14 @@ export default async function AdminCustomerDetailPage({
                       error={item.mf_journal_preview_error}
                       isSent={item.mf_status === "sent"}
                     />
+                    {item.mf_status !== "sent" && (
+                      <div className="action-row">
+                        <RerunOcrButton
+                          customerId={customer.id}
+                          submissionId={item.id}
+                        />
+                      </div>
+                    )}
                     {item.ocr_error && (
                       <small className="warning-text">OCR: {item.ocr_error}</small>
                     )}

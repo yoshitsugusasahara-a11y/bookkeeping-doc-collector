@@ -13,6 +13,7 @@ import {
   forceSendJournalOnly,
   processCustomerPendingJournalPreviews,
   processSubmissionToMoneyForward,
+  rerunOcrForSubmission,
 } from "@/lib/receipts/process-submissions";
 import {
   cleanupCustomerOldSubmissions,
@@ -546,6 +547,35 @@ export async function processSingleMfSubmission(
   } catch (error) {
     return { status: "error", message: getErrorMessage(error) };
   }
+}
+
+/**
+ * 資料を現在の設定で読み取り直す。仕訳生成指示を変更した後など、
+ * 保存済みの読み取り結果を作り直したいときに使う。手修正した内容は上書きされる。
+ *
+ * 読み取り直しはMFへの送信を伴わないため、顧客の承認状態に関わらず実行できる。
+ */
+export async function rerunSubmissionOcrAsAdmin(
+  customerId: string,
+  submissionId: string,
+): Promise<{ status: "success" | "error"; message?: string }> {
+  if (!customerId || !submissionId) {
+    return { status: "error", message: "対象の資料を確認できませんでした。" };
+  }
+
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  const result = await rerunOcrForSubmission({
+    supabase,
+    customerId,
+    submissionId,
+  });
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  return result;
 }
 
 export async function forceSendJournalOnlyAsAdmin(
