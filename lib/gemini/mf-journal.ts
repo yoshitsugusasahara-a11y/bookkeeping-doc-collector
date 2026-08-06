@@ -424,6 +424,7 @@ function buildPrompt({
   submissionTimestampLabel,
   customerJournalPrompt,
   accounts,
+  splitByTaxRate,
 }: {
   ocr: ReceiptOcrResult;
   transactionNote: string;
@@ -433,6 +434,7 @@ function buildPrompt({
   submissionTimestampLabel: string;
   customerJournalPrompt: string | null;
   accounts: MfAccountOption[];
+  splitByTaxRate: boolean;
 }) {
   const hasCustomerPrompt =
     typeof customerJournalPrompt === "string" &&
@@ -468,7 +470,7 @@ function buildPrompt({
     needsDateConfirmation
       ? 'タグには "確認" も必ず含めてください（日付が推定のため、後で確認が必要です）。'
       : "",
-    ocr.has_multiple_tax_rates
+    splitByTaxRate
       ? [
           "【重要：軽減税率・標準税率の混在レシートです】",
           "このレシートには8%（軽減税率）対象と10%（標準税率）対象の商品が混在しています。",
@@ -485,7 +487,7 @@ function buildPrompt({
       : "",
     `勘定科目候補: ${JSON.stringify(accounts.slice(0, 200))}`,
     "",
-    ocr.has_multiple_tax_rates
+    splitByTaxRate
       ? '返答例(複数税率): {"transaction_date":"2026-05-15","journal_type":"journal_entry","memo":"receipt import","tags":["AI"],"branches":[{"tax_rate_hint":10,"remark":"店舗名 取引内容 file.jpg (10%対象)","debitor":{"value":1080,"account_id":"..."},"creditor":{"value":1080,"account_id":"..."}},{"tax_rate_hint":8,"remark":"店舗名 取引内容 file.jpg (8%対象)","debitor":{"value":432,"account_id":"..."},"creditor":{"value":432,"account_id":"..."}}]}'
       : '返答例: {"transaction_date":"2026-05-15","journal_type":"journal_entry","memo":"receipt import","tags":["AI"],"branches":[{"remark":"店舗名 取引内容 file.jpg","debitor":{"value":1500,"account_id":"..."},"creditor":{"value":1500,"account_id":"..."}}]}',
   ].join("\n");
@@ -522,6 +524,13 @@ export async function generateMfJournalWithGemini({
 
   const taxLookup = buildAccountTaxLookup(accounts);
   const resolveReducedRateTaxId = buildReducedRateTaxResolver(taxes);
+
+  // 免税事業者のMFでは利用可能な税区分が1件も返らない。この場合、税率ごとに
+  // 仕訳を分けても両ブランチの科目・税区分が同一になり、金額が割れるだけで
+  // 意味がないため、税率による分割や軽減税率への差し替えは一切行わない。
+  const usesTaxClassification = taxes.length > 0;
+  const splitByTaxRate = ocr.has_multiple_tax_rates && usesTaxClassification;
+
   let lastError = "Gemini journal generation failed.";
 
   for (const { model, delay } of getGeminiAttempts()) {
@@ -552,6 +561,7 @@ export async function generateMfJournalWithGemini({
                       submissionTimestampLabel,
                       customerJournalPrompt,
                       accounts,
+                      splitByTaxRate,
                     }),
                   },
                 ],
@@ -595,13 +605,16 @@ export async function generateMfJournalWithGemini({
         typeof customerJournalPrompt === "string" &&
         customerJournalPrompt.trim().length > 0;
 
-      // 複数税率レシートで tax_rate_hint 8 と 10 が両方揃っていない場合は縮退扱い
+      // 複数税率レシートで tax_rate_hint 8 と 10 が両方揃っていない場合は縮退扱い。
+      // 税区分を使わない事業者では税率の読み取り結果が仕訳に影響しないため、
+      // 「税率を確認してください」という指摘自体が意味を持たず、判定を行わない。
       const hasValidTaxRateHints =
         journal.branches.some((b) => b.tax_rate_hint === 8) &&
         journal.branches.some((b) => b.tax_rate_hint === 10);
       const needsTaxRateReview =
-        ocr.needs_tax_rate_review ||
-        (ocr.has_multiple_tax_rates && !hasValidTaxRateHints);
+        usesTaxClassification &&
+        (ocr.needs_tax_rate_review ||
+          (ocr.has_multiple_tax_rates && !hasValidTaxRateHints));
 
       // 仮計上科目が使えるときだけ科目差し替えを行う。
       // auto-submit 側で未設定・不存在は送信前に弾いているため、ここに来る時点で
@@ -629,7 +642,9 @@ export async function generateMfJournalWithGemini({
       // 混在レシートでなくても、単一税率が8%だと確認できているレシート
       // （例：全品目が軽減税率対象）は、全ブランチに8%扱いを適用する。
       const singleReceiptRateHint: 8 | 10 | null =
-        !ocr.has_multiple_tax_rates && ocr.tax_breakdown?.length === 1
+        usesTaxClassification &&
+        !ocr.has_multiple_tax_rates &&
+        ocr.tax_breakdown?.length === 1
           ? ocr.tax_breakdown[0].rate
           : null;
 
@@ -664,9 +679,7 @@ export async function generateMfJournalWithGemini({
           // 特に仮計上時は税区分が両ブランチとも仮計上科目の既定値になるため、
           // この表記が税率を判別する唯一の手掛かりになる。
           const rateLabel =
-            ocr.has_multiple_tax_rates && tax_rate_hint
-              ? `(${tax_rate_hint}%対象)`
-              : "";
+            splitByTaxRate && tax_rate_hint ? `(${tax_rate_hint}%対象)` : "";
           const finalRemark = (
             rateLabel && !baseRemark.includes(rateLabel)
               ? `${baseRemark} ${rateLabel}`
