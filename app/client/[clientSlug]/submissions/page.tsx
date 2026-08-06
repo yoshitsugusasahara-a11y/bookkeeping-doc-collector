@@ -22,7 +22,10 @@ import {
   sendSubmissionToMoneyForward,
 } from "../actions";
 import { OcrEditForm } from "./ocr-edit-form";
-import { MoneyForwardSendButton } from "./submission-actions";
+import {
+  MoneyForwardSendButton,
+  RerunOcrButton,
+} from "./submission-actions";
 
 function getFileTypeLabel(mimeType: string) {
   if (mimeType === "application/pdf") return "PDF";
@@ -451,6 +454,13 @@ export default async function ClientSubmissionsPage({
                       disabled={!canSendToMf}
                       completed={isSent}
                     />
+                    {!isSent && (
+                      <RerunOcrButton
+                        clientSlug={clientSlug}
+                        submissionId={item.id}
+                        disabled={false}
+                      />
+                    )}
                   </div>
                 </div>
 

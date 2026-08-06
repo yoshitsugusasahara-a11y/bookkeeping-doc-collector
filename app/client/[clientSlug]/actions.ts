@@ -8,6 +8,7 @@ import { buildClearedMfJournalPreviewFields } from "@/lib/moneyforward/journal-p
 import {
   processCustomerPendingJournalPreviews,
   processSubmissionToMoneyForward,
+  rerunOcrForSubmission,
 } from "@/lib/receipts/process-submissions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -238,6 +239,30 @@ export async function updateSubmissionOcr(
   };
 }
 
+
+/**
+ * 資料を読み取り直す。仕訳生成指示を変更した後など、保存済みの読み取り結果を
+ * 現在の設定で作り直したいときに使う。手修正した内容は上書きされる。
+ */
+export async function rerunSubmissionOcr(
+  clientSlug: string,
+  submissionId: string,
+): Promise<{ status: "success" | "error"; message?: string }> {
+  if (!submissionId) {
+    return { status: "error", message: "対象の資料を確認できませんでした。" };
+  }
+
+  const { supabase, account } = await getApprovedClientAccount(clientSlug);
+
+  const result = await rerunOcrForSubmission({
+    supabase,
+    customerId: account.id,
+    submissionId,
+  });
+
+  revalidatePath(`/client/${clientSlug}/submissions`);
+  return result;
+}
 
 export async function sendSubmissionToMoneyForward(
   clientSlug: string,

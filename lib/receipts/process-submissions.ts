@@ -21,6 +21,7 @@ import {
 } from "@/lib/logging/activity-log";
 import { submitReceiptToMoneyForward } from "@/lib/moneyforward/auto-submit";
 import {
+  buildClearedMfJournalPreviewFields,
   generateAndStoreMfJournalPreview,
   type MfJournalPreview,
 } from "@/lib/moneyforward/journal-preview";
@@ -476,6 +477,120 @@ async function runOcrForSubmission({
     .eq("id", submission.id);
 
   return ocr.result;
+}
+
+/**
+ * 保存済みのOCR結果を破棄して読み取り直す。
+ *
+ * OCRは一度完了すると再実行されないため、後から仕訳生成指示を変えても
+ * 既存の資料には反映されない。とくに複数科目かどうかの判定は顧客の
+ * 仕訳生成指示に依存するので、指示を変えた後に読み取り直す手段が要る。
+ *
+ * 手修正した読み取り結果も上書きされるため、利用者の明示的な操作からのみ呼ぶこと。
+ */
+export async function rerunOcrForSubmission({
+  supabase,
+  customerId,
+  submissionId,
+}: {
+  supabase: SupabaseClient<Database>;
+  customerId: string;
+  submissionId: string;
+}): Promise<{ status: "success" | "error"; message?: string }> {
+  const submission = await getSubmissionForProcessing({
+    supabase,
+    submissionId,
+    customerId,
+  });
+
+  if (submission.mf_status === "sent") {
+    return {
+      status: "error",
+      message: "MF送信済みのため、読み取り直しはできません。",
+    };
+  }
+
+  if (!submission.source_storage_path) {
+    return {
+      status: "error",
+      message:
+        "元のファイルが保存されていないため、読み取り直しができません。資料を送信し直してください。",
+    };
+  }
+
+  const customer = await getCustomerDriveSettings({ supabase, customerId });
+
+  try {
+    const file = await downloadStoredFile({ supabase, submission });
+    const ocr = await analyzeReceiptWithGemini({
+      file,
+      mimeType: submission.mime_type,
+      transactionNote: submission.transaction_note,
+      customerJournalPrompt: customer.journal_prompt,
+    });
+
+    if (ocr.status !== "completed") {
+      return {
+        status: "error",
+        message: `読み取りに失敗しました。${ocr.error}`,
+      };
+    }
+
+    await supabase
+      .from("submissions")
+      .update({
+        ocr_status: "completed",
+        ocr_error: null,
+        ocr_raw_response: ocr.rawResponse,
+        ocr_processed_at: new Date().toISOString(),
+        ocr_date: ocr.result.date,
+        ocr_amount: ocr.result.amount,
+        ocr_store: ocr.result.store,
+        ocr_summary: ocr.result.summary,
+        ocr_payment_method: ocr.result.payment_method,
+        ocr_is_credit_card: ocr.result.is_credit_card,
+        ocr_tax_rate_8_subtotal:
+          ocr.result.tax_breakdown?.find((b) => b.rate === 8)?.subtotal ?? null,
+        ocr_tax_rate_10_subtotal:
+          ocr.result.tax_breakdown?.find((b) => b.rate === 10)?.subtotal ?? null,
+        ocr_has_multiple_tax_rates: ocr.result.has_multiple_tax_rates,
+        ocr_needs_tax_rate_review: ocr.result.needs_tax_rate_review,
+        ocr_has_multiple_account_candidates:
+          ocr.result.has_multiple_account_candidates,
+        ocr_account_review_reason: ocr.result.account_review_reason,
+        ocr_updated_at: new Date().toISOString(),
+        mf_status: "not_sent",
+        mf_error: null,
+        // 読み取り結果が変われば仕訳も変わるため、あわせて作り直す。
+        ...buildClearedMfJournalPreviewFields(),
+      })
+      .eq("id", submission.id);
+
+    await generateAndStoreMfJournalPreview({
+      supabase,
+      customerAccountId: customerId,
+      submissionId: submission.id,
+      submittedAt: submission.submitted_at,
+      fileName: submission.file_name,
+      mimeType: submission.mime_type,
+      transactionNote: submission.transaction_note,
+      ocr: ocr.result,
+      customerJournalPrompt: customer.journal_prompt,
+      suspenseAccountId: customer.suspense_account_id,
+      suspenseAccountName: customer.suspense_account_name,
+    });
+
+    return { status: "success" };
+  } catch (error) {
+    console.error("Failed to rerun OCR", error);
+    return {
+      status: "error",
+      message:
+        error instanceof Error
+          ? error.message
+          : "読み取り直しに失敗しました。時間をおいて再度お試しください。",
+    };
+  }
 }
 
 async function classifyAndFileNonReceiptIfNeeded({
