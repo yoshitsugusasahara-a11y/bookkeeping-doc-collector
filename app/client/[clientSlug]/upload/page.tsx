@@ -6,6 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import { logoutClient } from "../actions";
 import { SubmissionForm } from "./submission-form";
 
+// 送信後の after()（OCR・仕訳生成のバックグラウンド処理）に時間を確保する。
+// 未指定だと既定値が適用され、処理が途中で打ち切られる余地が広がる。
+export const maxDuration = 60;
+
 export default async function ClientUploadPage({
   params,
 }: {

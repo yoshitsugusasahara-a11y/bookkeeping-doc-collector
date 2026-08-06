@@ -781,18 +781,32 @@ export async function processCustomerPendingOcr({
   supabase,
   customerId,
   limit = 10,
+  submittedBefore = null,
 }: {
   supabase: SupabaseClient<Database>;
   customerId: string;
   limit?: number;
+  /**
+   * この日時より前に送信された資料だけを対象にする。
+   * 履歴画面表示時の掃き寄せで使う。アップロード直後の資料は
+   * 送信時の after() が処理中の可能性があり、同じ資料を
+   * 二重にOCRしてGemini呼び出しを無駄にしないための余白。
+   */
+  submittedBefore?: string | null;
 }) {
-  const { data: submissions, error } = await supabase
+  let query = supabase
     .from("submissions")
     .select(submissionProcessingColumns)
     .eq("customer_account_id", customerId)
     .in("ocr_status", ["pending", "failed"])
     .not("source_storage_path", "is", null)
-    .is("hidden_at", null)
+    .is("hidden_at", null);
+
+  if (submittedBefore) {
+    query = query.lt("submitted_at", submittedBefore);
+  }
+
+  const { data: submissions, error } = await query
     .order("submitted_at", { ascending: true })
     .limit(limit);
 

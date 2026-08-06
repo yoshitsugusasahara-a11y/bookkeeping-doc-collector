@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/logging/activity-log";
 import {
   processCustomerPendingJournalPreviews,
+  processCustomerPendingOcr,
   processCustomerPendingSubmissions,
 } from "@/lib/receipts/process-submissions";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -62,6 +63,21 @@ export async function GET(request: Request) {
 
     for (const customer of customers ?? []) {
       try {
+        // OCR未処理のまま取り残された資料の安全網。アップロード時の
+        // バックグラウンド処理が打ち切られた場合の受け皿となる。
+        // MFへの送信は伴わないため、送信モードに関わらず全顧客に対して行う。
+        // （送信モードで分岐するのは後段のMF送信だけでよい。都度送信の顧客を
+        // ここで除外すると、その顧客の取りこぼしを拾う経路がなくなる。）
+        try {
+          await processCustomerPendingOcr({
+            supabase,
+            customerId: customer.id,
+            limit: 3,
+          });
+        } catch (ocrError) {
+          console.error("Cron: failed to process pending OCR", ocrError);
+        }
+
         // 自動送信しない顧客でも予測仕訳は必要なため、送信の可否に関わらず
         // 未生成分を作り直す。アップロード直後の生成が失敗した場合の受け皿。
         try {

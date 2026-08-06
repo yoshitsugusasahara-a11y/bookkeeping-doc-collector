@@ -190,12 +190,17 @@ export async function createSubmission(
 
   revalidatePath(`/client/${clientSlug}/submissions`);
   revalidatePath("/admin/customers");
+  // 一括アップロード時はファイル1件ごとにこの after() が起動するため、
+  // 1回の処理は1件で足りる。まとめて処理しようとすると（例: 10件）、
+  // 1件あたり10〜20秒かかるOCRが積み重なって実行時間の上限を超え、
+  // 途中で打ち切られた残りが未処理のまま取り残される。
+  // 取りこぼしが出た場合はCronと履歴画面表示時の掃き寄せが拾う。
   after(async () => {
     try {
       await processCustomerPendingOcr({
         supabase,
         customerId: account.id,
-        limit: 10,
+        limit: 1,
       });
     } catch (processError) {
       console.error("Failed to start background receipt processing", processError);

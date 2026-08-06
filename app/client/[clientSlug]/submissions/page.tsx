@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import {
   Camera,
   CheckCircle2,
@@ -14,6 +15,7 @@ import { DeleteSubmissionButton } from "@/components/delete-submission-button";
 import { JournalPreviewTable } from "@/components/journal-preview-table";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import type { MfJournalPreview } from "@/lib/moneyforward/journal-preview";
+import { processCustomerPendingOcr } from "@/lib/receipts/process-submissions";
 import { resolveSendMode } from "@/lib/receipts/send-mode";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -26,6 +28,9 @@ import {
   MoneyForwardSendButton,
   RerunOcrButton,
 } from "./submission-actions";
+
+// 表示後の after()（OCR未処理分の掃き寄せ）に時間を確保する。
+export const maxDuration = 60;
 
 function getFileTypeLabel(mimeType: string) {
   if (mimeType === "application/pdf") return "PDF";
@@ -202,6 +207,30 @@ export default async function ClientSubmissionsPage({
   ]);
   const retentionLimit = account.submission_retention_limit || 200;
   const sendMode = resolveSendMode(account);
+
+  // OCR未処理のまま取り残された資料の掃き寄せ。Cron（1日1回）を待たずに、
+  // 利用者が状況を見に来たこのタイミングで処理を進める。
+  // 直近2分以内の資料は、アップロード時のバックグラウンド処理がまだ
+  // 動いている可能性があるため対象外とし、同じ資料の二重処理を避ける。
+  const hasStalePendingOcr = submissions.some(
+    (item) =>
+      (item.ocr_status === "pending" || item.ocr_status === "failed") &&
+      Date.now() - new Date(item.submitted_at).getTime() > 2 * 60 * 1000,
+  );
+  if (hasStalePendingOcr) {
+    after(async () => {
+      try {
+        await processCustomerPendingOcr({
+          supabase,
+          customerId: account.id,
+          limit: 2,
+          submittedBefore: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+        });
+      } catch (sweepError) {
+        console.error("Failed to sweep pending OCR", sweepError);
+      }
+    });
+  }
 
   return (
     <main className="app-frame">
