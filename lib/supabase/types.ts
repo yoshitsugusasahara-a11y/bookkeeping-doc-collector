@@ -51,6 +51,9 @@ export type Database = {
           suspense_account_id: string | null;
           suspense_account_name: string | null;
           auto_send_enabled: boolean;
+          // 【名称が実態と不一致・要リネーム】承認モードを廃止した名残で、
+          // consented_at/by は現在 auto_send_enabled への同意を記録している。
+          // skip_approval は未使用。詳細は supabase/schema.sql のコメント参照。
           skip_approval: boolean;
           skip_approval_consented_at: string | null;
           skip_approval_consented_by: string | null;

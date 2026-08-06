@@ -65,6 +65,9 @@ export async function updateAutoSendEnabled(
   // customer_accounts は顧客のセッションからは更新できない（RLSにより
   // 0件更新となり、エラーにもならず黙って失敗する）。上で本人の顧客であることを
   // 確認済みなので、対象を account.id に限定したうえで管理用クライアントで更新する。
+  // skip_approval_consented_at/by は名称が実態と合っていない（承認モードを
+  // 廃止した名残）。現在は auto_send_enabled への同意日時・同意者を記録している。
+  // 詳細と今後のリネーム方針は supabase/schema.sql のコメントを参照。
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("customer_accounts")

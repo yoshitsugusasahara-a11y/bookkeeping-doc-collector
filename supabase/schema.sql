@@ -165,6 +165,10 @@ alter table public.customer_accounts
   -- 自動送信の有効化は「内容を確認しないまま送られてよい」という同意にあたるため、
   -- 同意した本人と日時を記録する。顧客本人のみ変更でき、管理者からは変更できない。
   add column if not exists auto_send_enabled boolean not null default false,
+  -- 【名称が実態と不一致・要リネーム】当初は「自動送信」と「承認の省略」を
+  -- 別々の設定として設計していた名残。承認モードを廃止して2択に整理したため、
+  -- 下記2列は現在「auto_send_enabled への同意」を記録している。
+  -- skip_approval は完全に未使用（削除予定）。
   add column if not exists skip_approval boolean not null default false,
   add column if not exists skip_approval_consented_at timestamptz,
   add column if not exists skip_approval_consented_by uuid;
