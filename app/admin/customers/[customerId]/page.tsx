@@ -19,7 +19,7 @@ import { deleteCustomerAccount } from "../actions";
 import { CustomerAccountActionButton } from "../customer-account-action-button";
 import { CustomerAccountToggleButton } from "../customer-account-toggle-button";
 import { AdminOcrEditForm } from "./admin-ocr-edit-form";
-import { AutoSendForm } from "./auto-send-form";
+import { AutoSendStatus } from "./auto-send-form";
 import { DisconnectMfButton } from "./disconnect-mf-button";
 import { DocumentRuleActions } from "./document-rule-actions";
 import { DocumentRuleForm } from "./document-rule-form";
@@ -196,7 +196,7 @@ export default async function AdminCustomerDetailPage({
     supabase
       .from("customer_accounts")
       .select(
-        "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, irregular_drive_folder_id, irregular_drive_folder_name, journal_prompt, suspense_account_id, suspense_account_name, auto_send_enabled, skip_approval, skip_approval_consented_at, submission_retention_limit, created_at",
+        "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, irregular_drive_folder_id, irregular_drive_folder_name, journal_prompt, suspense_account_id, suspense_account_name, auto_send_enabled, skip_approval_consented_at, submission_retention_limit, created_at",
       )
       .eq("id", customerId)
       .maybeSingle(),
@@ -300,7 +300,7 @@ export default async function AdminCustomerDetailPage({
   const adminSendableSubmissionIds = submissions
     .filter((item) =>
       canAdminSend({
-        skipApproval: customer.skip_approval,
+        autoSendEnabled: customer.auto_send_enabled,
         approvedAt: item.approved_at,
       }),
     )
@@ -562,14 +562,12 @@ export default async function AdminCustomerDetailPage({
               <p className="eyebrow">Send Mode</p>
               <h2>仕訳の送信方法</h2>
               <p className="muted">
-                既定では自動送信しません。顧客が履歴画面で内容を確認し、資料ごとに送信します。自動送信を有効にした場合も、顧客が承認した資料だけが送信されます。
+                既定では自動送信しません。顧客が履歴画面で内容を確認し、資料ごとに送信します。
               </p>
             </div>
-            <AutoSendForm
-              customerId={customer.id}
+            <AutoSendStatus
               autoSendEnabled={customer.auto_send_enabled}
-              skipApproval={customer.skip_approval}
-              skipApprovalConsentedAt={customer.skip_approval_consented_at}
+              consentedAt={customer.skip_approval_consented_at}
             />
           </section>
 

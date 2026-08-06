@@ -1064,31 +1064,23 @@ export async function processCustomerPendingSubmissions({
   // 利用者が資料ごとに送信を指示したときだけ送る。
   const { data: sendSettings, error: sendSettingsError } = await supabase
     .from("customer_accounts")
-    .select("auto_send_enabled, skip_approval")
+    .select("auto_send_enabled")
     .eq("id", customerId)
     .maybeSingle();
 
   if (sendSettingsError) throw sendSettingsError;
 
-  const sendMode = resolveSendMode(sendSettings ?? {});
-  if (sendMode === "manual") {
+  if (resolveSendMode(sendSettings ?? {}) === "manual") {
     return { processed: 0, failed: 0, errors: [], skippedByMode: true };
   }
 
-  let submissionQuery = supabase
+  const { data: submissions, error } = await supabase
     .from("submissions")
-    .select("id, approved_at")
+    .select("id")
     .eq("customer_account_id", customerId)
     .neq("mf_status", "sent")
     .not("source_storage_path", "is", null)
-    .is("hidden_at", null);
-
-  // 承認が必要なモードでは、承認済みの資料だけを自動送信の対象にする。
-  if (sendMode === "approval") {
-    submissionQuery = submissionQuery.not("approved_at", "is", null);
-  }
-
-  const { data: submissions, error } = await submissionQuery
+    .is("hidden_at", null)
     .order("submitted_at", { ascending: true })
     .limit(limit);
 

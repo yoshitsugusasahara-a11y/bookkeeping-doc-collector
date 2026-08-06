@@ -41,7 +41,7 @@ export default async function ClientSettingsPage({
   const { data: account } = await supabase
     .from("customer_accounts")
     .select(
-      "id, customer_name, approval_status, auto_send_enabled, skip_approval, skip_approval_consented_at",
+      "id, customer_name, approval_status, auto_send_enabled, skip_approval_consented_at",
     )
     .eq("user_id", user.id)
     .eq("client_slug", clientSlug)
@@ -126,8 +126,7 @@ export default async function ClientSettingsPage({
         <SendModeForm
           clientSlug={clientSlug}
           autoSendEnabled={account.auto_send_enabled}
-          skipApproval={account.skip_approval}
-          skipApprovalConsentedAt={account.skip_approval_consented_at}
+          consentedAt={account.skip_approval_consented_at}
         />
       </section>
 

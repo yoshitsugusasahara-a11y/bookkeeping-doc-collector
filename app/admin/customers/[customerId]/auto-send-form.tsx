@@ -1,81 +1,46 @@
-"use client";
-
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
-import { ToggleSwitch } from "@/components/toggle-switch";
-import { updateCustomerAutoSend } from "./actions";
-
-export function AutoSendForm({
-  customerId,
+/**
+ * 自動送信の設定状況の表示。
+ *
+ * 自動送信を有効にすることは「内容を確認しないまま送られてよい」という
+ * 顧客の意思表示にあたるため、管理者からは変更できない。ここでは
+ * 現在の状態と同意日時の確認のみを行う。
+ */
+export function AutoSendStatus({
   autoSendEnabled,
-  skipApproval,
-  skipApprovalConsentedAt,
+  consentedAt,
 }: {
-  customerId: string;
   autoSendEnabled: boolean;
-  skipApproval: boolean;
-  skipApprovalConsentedAt: string | null;
+  consentedAt: string | null;
 }) {
-  const [isSaving, setIsSaving] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  async function handleChange(enabled: boolean) {
-    if (isSaving) return;
-    setNotice(null);
-    setIsSaving(true);
-    try {
-      const result = await updateCustomerAutoSend(customerId, enabled);
-      if (result.status === "error") {
-        setNotice(result.message);
-        return;
-      }
-      window.location.reload();
-    } catch (error) {
-      console.error("Failed to update auto send setting", error);
-      setNotice("設定を保存できませんでした。");
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
   return (
     <div className="ocr-edit-form">
-      <ToggleSwitch
-        checked={autoSendEnabled}
-        disabled={isSaving}
-        onChange={handleChange}
-        label="自動送信"
-        description="AIが作成した仕訳をマネーフォワードへ自動送信します。オフの場合、顧客が資料ごとに送信します。"
-      />
-
       <dl className="ocr-summary compact-summary">
         <div>
-          <dt>承認の省略</dt>
+          <dt>現在の設定</dt>
           <dd>
-            {skipApproval
-              ? `省略する（顧客が同意済み${
-                  skipApprovalConsentedAt
-                    ? `: ${new Intl.DateTimeFormat("ja-JP", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                        timeZone: "Asia/Tokyo",
-                      }).format(new Date(skipApprovalConsentedAt))}`
-                    : ""
-                }）`
-              : "省略しない（資料ごとに顧客の承認が必要）"}
+            {autoSendEnabled
+              ? "自動送信する（顧客が同意済み）"
+              : "自動送信しない（顧客が資料ごとに送信）"}
           </dd>
         </div>
+        {autoSendEnabled && (
+          <div>
+            <dt>同意日時</dt>
+            <dd>
+              {consentedAt
+                ? new Intl.DateTimeFormat("ja-JP", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                    timeZone: "Asia/Tokyo",
+                  }).format(new Date(consentedAt))
+                : "未取得"}
+            </dd>
+          </div>
+        )}
       </dl>
       <small className="muted">
-        承認の省略は、マネーフォワード上でご自身が修正することを引き受ける選択にあたるため、顧客ご本人の操作でのみ設定できます。管理者からは変更できません。
+        自動送信の設定は、内容を確認しないまま送信されることへの同意を伴うため、顧客ご本人の操作でのみ変更できます。管理者からは変更できません。
       </small>
-
-      {isSaving && (
-        <small className="muted">
-          <Loader2 className="spin-icon" size={14} /> 保存中
-        </small>
-      )}
-      {notice && <small className="warning-text">{notice}</small>}
     </div>
   );
 }

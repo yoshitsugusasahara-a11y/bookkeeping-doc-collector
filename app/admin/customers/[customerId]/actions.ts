@@ -338,53 +338,6 @@ export async function updateCustomerSuspenseAccount(
   };
 }
 
-/**
- * 自動送信のON/OFF。承認は引き続き必要なので管理者からも設定できる。
- * 承認そのものを省略する設定は、利用者本人の同意が必要なため顧客画面のみ。
- */
-export async function updateCustomerAutoSend(
-  customerId: string,
-  enabled: boolean,
-): Promise<{ status: "success" | "error"; message: string }> {
-  if (!customerId) {
-    return { status: "error", message: "顧客情報を取得できませんでした。" };
-  }
-
-  const supabase = await ensureAdmin();
-  if (!supabase) {
-    return { status: "error", message: "管理者権限を確認できませんでした。" };
-  }
-
-  const { error } = await supabase
-    .from("customer_accounts")
-    .update(
-      enabled
-        ? { auto_send_enabled: true }
-        : {
-            auto_send_enabled: false,
-            skip_approval: false,
-            skip_approval_consented_at: null,
-            skip_approval_consented_by: null,
-          },
-    )
-    .eq("id", customerId);
-
-  if (error) {
-    return {
-      status: "error",
-      message: `設定を保存できませんでした。${getErrorMessage(error)}`,
-    };
-  }
-
-  revalidatePath(`/admin/customers/${customerId}`);
-  return {
-    status: "success",
-    message: enabled
-      ? "自動送信を有効にしました。"
-      : "自動送信を無効にしました。",
-  };
-}
-
 export async function updateCustomerRetentionSettings(
   _prevState: RetentionSettingsState,
   formData: FormData,
@@ -485,7 +438,7 @@ export async function listPendingMfSubmissions(
 
   const { data: customer } = await supabase
     .from("customer_accounts")
-    .select("skip_approval")
+    .select("auto_send_enabled")
     .eq("id", customerId)
     .maybeSingle();
 
@@ -497,8 +450,8 @@ export async function listPendingMfSubmissions(
     .not("source_storage_path", "is", null)
     .is("hidden_at", null);
 
-  // 承認省略に同意していない顧客は、承認済みの資料だけが管理者の送信対象。
-  if (!customer?.skip_approval) {
+  // 自動送信に同意していない顧客は、本人が送信を指示した資料だけが管理者の対象。
+  if (!customer?.auto_send_enabled) {
     query = query.not("approved_at", "is", null);
   }
 
@@ -539,7 +492,7 @@ async function assertAdminCanSend({
   const [{ data: customer }, { data: submission }] = await Promise.all([
     supabase
       .from("customer_accounts")
-      .select("skip_approval")
+      .select("auto_send_enabled")
       .eq("id", customerId)
       .maybeSingle(),
     supabase
@@ -553,7 +506,7 @@ async function assertAdminCanSend({
   if (!submission) return "対象の資料が見つかりませんでした。";
 
   return canAdminSend({
-    skipApproval: customer?.skip_approval,
+    autoSendEnabled: customer?.auto_send_enabled,
     approvedAt: submission.approved_at,
   })
     ? null

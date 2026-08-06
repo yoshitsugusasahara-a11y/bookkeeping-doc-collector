@@ -161,9 +161,10 @@ alter table public.customer_accounts
   -- 借方が複数科目に分かれる可能性がある資料の仮計上先（顧客ごとに設定）
   add column if not exists suspense_account_id text,
   add column if not exists suspense_account_name text,
-  -- 仕訳の送信方法。既定は「承認モード」（資料ごとの承認は必要だが、
-  -- 承認すれば送信操作は不要）。承認の省略は別途 skip_approval で管理する。
-  add column if not exists auto_send_enabled boolean not null default true,
+  -- 仕訳の送信方法。既定は自動送信しない（利用者が資料ごとに送信する）。
+  -- 自動送信の有効化は「内容を確認しないまま送られてよい」という同意にあたるため、
+  -- 同意した本人と日時を記録する。顧客本人のみ変更でき、管理者からは変更できない。
+  add column if not exists auto_send_enabled boolean not null default false,
   add column if not exists skip_approval boolean not null default false,
   add column if not exists skip_approval_consented_at timestamptz,
   add column if not exists skip_approval_consented_by uuid;

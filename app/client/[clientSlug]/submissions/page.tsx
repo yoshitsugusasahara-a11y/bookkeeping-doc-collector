@@ -21,12 +21,6 @@ import {
   logoutClient,
   sendSubmissionToMoneyForward,
 } from "../actions";
-import {
-  ApprovalButton,
-  ApprovalSelectionProvider,
-  BulkApprovalBar,
-  SubmissionSelectCheckbox,
-} from "./approval-controls";
 import { OcrEditForm } from "./ocr-edit-form";
 import { MoneyForwardSendButton } from "./submission-actions";
 
@@ -135,7 +129,7 @@ export default async function ClientSubmissionsPage({
   const { data: account } = await supabase
     .from("customer_accounts")
     .select(
-      "id, approval_status, submission_retention_limit, auto_send_enabled, skip_approval",
+      "id, approval_status, submission_retention_limit, auto_send_enabled",
     )
     .eq("user_id", user.id)
     .eq("client_slug", clientSlug)
@@ -205,15 +199,8 @@ export default async function ClientSubmissionsPage({
   ]);
   const retentionLimit = account.submission_retention_limit || 200;
   const sendMode = resolveSendMode(account);
-  // 一括操作の対象は、OCRが完了していてまだ送信されていないもの。
-  const selectableIds = submissions
-    .filter(
-      (item) => item.ocr_status === "completed" && item.mf_status !== "sent",
-    )
-    .map((item) => item.id);
 
   return (
-    <ApprovalSelectionProvider>
     <main className="app-frame">
       <header className="topbar">
         <div>
@@ -292,15 +279,6 @@ export default async function ClientSubmissionsPage({
         </section>
       )}
 
-      {/* 一括操作は承認モードのみ。都度送信モードで一括送信を許すと、
-          内容を確認せずまとめて送れてしまい、既定モードの意味がなくなる。 */}
-      {sendMode === "approval" && selectableIds.length > 0 && (
-        <BulkApprovalBar
-          clientSlug={clientSlug}
-          selectableIds={selectableIds}
-        />
-      )}
-
       <section className="history-list" aria-label="送信済み資料">
         {submissions.length === 0 && (
           <div className="empty-state">
@@ -357,10 +335,8 @@ export default async function ClientSubmissionsPage({
                   <div className="status-line">
                     <span>{getOcrStatusLabel(item.ocr_status)}</span>
                     <span>{getMfStatusLabel(item.mf_status)}</span>
-                    {sendMode === "approval" && !isSent && (
-                      <span>
-                        {item.approved_at ? "承認済み（送信待ち）" : "未承認"}
-                      </span>
+                    {sendMode === "auto" && !isSent && canSendToMf && (
+                      <span>自動送信待ち</span>
                     )}
                   </div>
 
@@ -469,27 +445,12 @@ export default async function ClientSubmissionsPage({
                   />
 
                   <div className="action-row">
-                    {sendMode === "approval" ? (
-                      <ApprovalButton
-                        clientSlug={clientSlug}
-                        submissionId={item.id}
-                        approvedAt={item.approved_at}
-                        disabled={!canSendToMf}
-                      />
-                    ) : (
-                      <MoneyForwardSendButton
-                        clientSlug={clientSlug}
-                        submissionId={item.id}
-                        disabled={!canSendToMf}
-                        completed={isSent}
-                      />
-                    )}
-                    {canSendToMf && sendMode === "approval" && (
-                      <SubmissionSelectCheckbox
-                        submissionId={item.id}
-                        label={`${item.file_name} をまとめて承認する対象にする`}
-                      />
-                    )}
+                    <MoneyForwardSendButton
+                      clientSlug={clientSlug}
+                      submissionId={item.id}
+                      disabled={!canSendToMf}
+                      completed={isSent}
+                    />
                   </div>
                 </div>
 
@@ -511,6 +472,5 @@ export default async function ClientSubmissionsPage({
         })}
       </section>
     </main>
-    </ApprovalSelectionProvider>
   );
 }
