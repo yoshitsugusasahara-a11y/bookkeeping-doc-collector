@@ -20,6 +20,7 @@ import { CustomerAccountActionButton } from "../customer-account-action-button";
 import { CustomerAccountToggleButton } from "../customer-account-toggle-button";
 import { AdminOcrEditForm } from "./admin-ocr-edit-form";
 import { AutoSendStatus } from "./auto-send-form";
+import { BusinessProfileForm } from "./business-profile-form";
 import { DisconnectMfButton } from "./disconnect-mf-button";
 import { DocumentRuleActions } from "./document-rule-actions";
 import { DocumentRuleForm } from "./document-rule-form";
@@ -197,7 +198,7 @@ export default async function AdminCustomerDetailPage({
     supabase
       .from("customer_accounts")
       .select(
-        "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, irregular_drive_folder_id, irregular_drive_folder_name, journal_prompt, suspense_account_id, suspense_account_name, auto_send_enabled, skip_approval_consented_at, submission_retention_limit, created_at",
+        "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, irregular_drive_folder_id, irregular_drive_folder_name, journal_prompt, business_description, mf_office_type, mf_office_is_manufacturing, mf_office_is_real_estate, mf_office_fetched_at, suspense_account_id, suspense_account_name, auto_send_enabled, skip_approval_consented_at, submission_retention_limit, created_at",
       )
       .eq("id", customerId)
       .maybeSingle(),
@@ -541,6 +542,28 @@ export default async function AdminCustomerDetailPage({
               errorDriveFolderName={customer.error_drive_folder_name}
               irregularDriveFolderId={customer.irregular_drive_folder_id}
               irregularDriveFolderName={customer.irregular_drive_folder_name}
+            />
+          </section>
+
+          <section className="settings-panel" aria-label="業種・事業者情報">
+            <div>
+              <p className="eyebrow">Business Profile</p>
+              <h2>業種・事業者情報</h2>
+              <p className="muted">
+                仕訳を作成する際の背景情報として使います。同じレシートでも業種によって適切な勘定科目が変わるため（飲食店の食材は仕入高、プログラマーの食材は福利厚生費など）、具体的に記入するほど精度が上がります。事業形態・不動産所得・製造業の別はマネーフォワードから自動取得します。
+              </p>
+              <p className="muted">
+                これらはあくまで判断材料です。特定の処理を指定したい場合は、下の「仕訳生成指示」に記載してください。そちらが優先されます。
+              </p>
+            </div>
+            <BusinessProfileForm
+              customerId={customer.id}
+              businessDescription={customer.business_description}
+              officeType={customer.mf_office_type}
+              isManufacturing={customer.mf_office_is_manufacturing}
+              isRealEstate={customer.mf_office_is_real_estate}
+              officeFetchedAt={customer.mf_office_fetched_at}
+              isMfConnected={Boolean(mfConnection)}
             />
           </section>
 

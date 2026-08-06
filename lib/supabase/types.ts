@@ -48,6 +48,11 @@ export type Database = {
           irregular_drive_folder_id: string | null;
           irregular_drive_folder_name: string | null;
           journal_prompt: string | null;
+          business_description: string | null;
+          mf_office_type: string | null;
+          mf_office_is_manufacturing: boolean | null;
+          mf_office_is_real_estate: boolean | null;
+          mf_office_fetched_at: string | null;
           suspense_account_id: string | null;
           suspense_account_name: string | null;
           auto_send_enabled: boolean;
@@ -75,6 +80,11 @@ export type Database = {
           irregular_drive_folder_id?: string | null;
           irregular_drive_folder_name?: string | null;
           journal_prompt?: string | null;
+          business_description?: string | null;
+          mf_office_type?: string | null;
+          mf_office_is_manufacturing?: boolean | null;
+          mf_office_is_real_estate?: boolean | null;
+          mf_office_fetched_at?: string | null;
           suspense_account_id?: string | null;
           suspense_account_name?: string | null;
           auto_send_enabled?: boolean;
@@ -99,6 +109,11 @@ export type Database = {
           irregular_drive_folder_id?: string | null;
           irregular_drive_folder_name?: string | null;
           journal_prompt?: string | null;
+          business_description?: string | null;
+          mf_office_type?: string | null;
+          mf_office_is_manufacturing?: boolean | null;
+          mf_office_is_real_estate?: boolean | null;
+          mf_office_fetched_at?: string | null;
           suspense_account_id?: string | null;
           suspense_account_name?: string | null;
           auto_send_enabled?: boolean;

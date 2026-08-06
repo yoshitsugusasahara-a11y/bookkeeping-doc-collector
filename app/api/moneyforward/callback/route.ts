@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { fetchAndStoreMoneyForwardOffice } from "@/lib/moneyforward/office";
 import { exchangeMoneyForwardCode } from "@/lib/moneyforward/oauth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -80,6 +81,18 @@ export async function GET(request: NextRequest) {
 
     if (upsertError) {
       throw upsertError;
+    }
+
+    // 事業者情報（個人/法人・不動産所得・製造業）は仕訳の背景情報として使う。
+    // 内容が変わることは稀なため毎回は取得せず、連携が済んだこの時点で保存しておく。
+    // 取得できなくても連携自体は成立させたいので、失敗しても続行する。
+    try {
+      await fetchAndStoreMoneyForwardOffice({
+        supabase,
+        customerAccountId: account.id,
+      });
+    } catch (officeError) {
+      console.error("Failed to fetch MF office after connect", officeError);
     }
 
     return clearOauthCookies(

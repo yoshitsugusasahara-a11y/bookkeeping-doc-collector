@@ -188,11 +188,13 @@ export async function analyzeReceiptWithGemini({
   mimeType,
   transactionNote,
   customerJournalPrompt = null,
+  businessContextLines = [],
 }: {
   file: File;
   mimeType: string;
   transactionNote: string;
   customerJournalPrompt?: string | null;
+  businessContextLines?: string[];
 }): Promise<ReceiptOcrOutcome> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -255,6 +257,7 @@ export async function analyzeReceiptWithGemini({
                     "  例: 方針に「食品も日用品もすべて仕入で処理する」とある → 食品と日用品が混在していても false。",
                     "  例: 方針に「食品は仕入、日用品は消耗品費」とある → 科目が分かれるため true。",
                     "  例: 方針に科目の定めがない、またはこのレシートに当てはまる記載がない → 上記の一般的な基準で判定する。",
+                    ...businessContextLines,
                     customerJournalPrompt && customerJournalPrompt.trim()
                       ? `顧客別の仕訳処理方針: ${customerJournalPrompt.trim()}`
                       : "顧客別の仕訳処理方針: なし",

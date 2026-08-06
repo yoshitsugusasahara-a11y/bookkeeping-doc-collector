@@ -425,6 +425,7 @@ function buildPrompt({
   customerJournalPrompt,
   accounts,
   splitByTaxRate,
+  businessContextLines,
 }: {
   ocr: ReceiptOcrResult;
   transactionNote: string;
@@ -435,6 +436,7 @@ function buildPrompt({
   customerJournalPrompt: string | null;
   accounts: MfAccountOption[];
   splitByTaxRate: boolean;
+  businessContextLines: string[];
 }) {
   const hasCustomerPrompt =
     typeof customerJournalPrompt === "string" &&
@@ -451,6 +453,9 @@ function buildPrompt({
     "借方は取引内容、店舗名、OCR結果から最も自然な費用科目または仕入科目を選んでください。",
     "摘要 remark には、店舗名、取引内容、添付ファイル名を短く含めてください。",
     "",
+    ...(businessContextLines.length > 0
+      ? [...businessContextLines, ""]
+      : []),
     "【指示の優先順位】",
     "顧客別の仕訳生成指示は、その顧客の会計方針です。勘定科目・補助科目の選択、摘要の書き方、タグの追加、単一科目か複数科目かの判断については、上記の一般的な指示より顧客別の指示を優先してください。",
     "例: 顧客別指示に「食品も日用品もすべて仕入で処理する」とある場合、品目が複数種類あっても仕訳は1本にまとめ、指示された科目を使ってください。",
@@ -510,6 +515,7 @@ export async function generateMfJournalWithGemini({
   accounts,
   taxes = [],
   suspenseAccountId = null,
+  businessContextLines = [],
 }: {
   ocr: ReceiptOcrResult;
   transactionNote: string;
@@ -521,6 +527,7 @@ export async function generateMfJournalWithGemini({
   accounts: MfAccountOption[];
   taxes?: MfTaxOption[];
   suspenseAccountId?: string | null;
+  businessContextLines?: string[];
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -568,6 +575,7 @@ export async function generateMfJournalWithGemini({
                       customerJournalPrompt,
                       accounts,
                       splitByTaxRate,
+                      businessContextLines,
                     }),
                   },
                 ],

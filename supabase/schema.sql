@@ -158,6 +158,13 @@ alter table public.customer_accounts
   add column if not exists irregular_drive_folder_name text,
   add column if not exists journal_prompt text,
   add column if not exists submission_retention_limit integer not null default 200,
+  -- 仕訳生成の背景情報。業種は手入力、それ以外はMFの事業者情報APIから取得して保存する。
+  -- いずれも判断材料であり、journal_prompt（顧客別の仕訳生成指示）より優先はしない。
+  add column if not exists business_description text,
+  add column if not exists mf_office_type text,
+  add column if not exists mf_office_is_manufacturing boolean,
+  add column if not exists mf_office_is_real_estate boolean,
+  add column if not exists mf_office_fetched_at timestamptz,
   -- 借方が複数科目に分かれる可能性がある資料の仮計上先（顧客ごとに設定）
   add column if not exists suspense_account_id text,
   add column if not exists suspense_account_name text,

@@ -35,6 +35,7 @@ export async function submitReceiptToMoneyForward({
   customerJournalPrompt = null,
   suspenseAccountId = null,
   suspenseAccountName = null,
+  businessContextLines = [],
   storedPreview = null,
 }: {
   supabase: SupabaseClient<Database>;
@@ -48,6 +49,7 @@ export async function submitReceiptToMoneyForward({
   customerJournalPrompt?: string | null;
   suspenseAccountId?: string | null;
   suspenseAccountName?: string | null;
+  businessContextLines?: string[];
   storedPreview?: MfJournalPreview | null;
 }) {
   const accessToken = await resolveMoneyForwardAccessToken({
@@ -83,6 +85,7 @@ export async function submitReceiptToMoneyForward({
       customerJournalPrompt,
       suspenseAccountId,
       suspenseAccountName,
+      businessContextLines,
     }));
 
   if (!preview) {

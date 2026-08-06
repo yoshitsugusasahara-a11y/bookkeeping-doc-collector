@@ -29,6 +29,7 @@ import {
   buildVoucherFileName,
   getExtensionFromMimeType,
 } from "@/lib/moneyforward/client";
+import { buildBusinessContextLines } from "@/lib/moneyforward/office";
 import { resolveSendMode } from "@/lib/receipts/send-mode";
 import type { Database } from "@/lib/supabase/types";
 
@@ -78,7 +79,21 @@ type CustomerDriveSettings = {
   journal_prompt: string | null;
   suspense_account_id: string | null;
   suspense_account_name: string | null;
+  business_description: string | null;
+  mf_office_type: string | null;
+  mf_office_is_manufacturing: boolean | null;
+  mf_office_is_real_estate: boolean | null;
 };
+
+/** 顧客設定から、Geminiへ渡す事業者の背景情報を組み立てる。 */
+function getBusinessContextLines(customer: CustomerDriveSettings) {
+  return buildBusinessContextLines({
+    businessDescription: customer.business_description,
+    officeType: customer.mf_office_type,
+    isManufacturing: customer.mf_office_is_manufacturing,
+    isRealEstate: customer.mf_office_is_real_estate,
+  });
+}
 
 type DocumentRule = DocumentRuleForClassification & {
   drive_folder_id: string | null;
@@ -225,7 +240,7 @@ async function getCustomerDriveSettings({
   const { data: customer, error } = await supabase
     .from("customer_accounts")
     .select(
-      "id, drive_folder_id, error_drive_folder_id, irregular_drive_folder_id, journal_prompt, suspense_account_id, suspense_account_name",
+      "id, drive_folder_id, error_drive_folder_id, irregular_drive_folder_id, journal_prompt, suspense_account_id, suspense_account_name, business_description, mf_office_type, mf_office_is_manufacturing, mf_office_is_real_estate",
     )
     .eq("id", customerId)
     .maybeSingle();
@@ -423,11 +438,13 @@ async function runOcrForSubmission({
   submission,
   file,
   customerJournalPrompt = null,
+  businessContextLines = [],
 }: {
   supabase: SupabaseClient<Database>;
   submission: SubmissionRow;
   file: File;
   customerJournalPrompt?: string | null;
+  businessContextLines?: string[];
 }) {
   const existingOcr = getCompletedOcr(submission);
   if (existingOcr) return existingOcr;
@@ -437,6 +454,7 @@ async function runOcrForSubmission({
     mimeType: submission.mime_type,
     transactionNote: submission.transaction_note,
     customerJournalPrompt,
+    businessContextLines,
   });
 
   if (ocr.status !== "completed") {
@@ -527,6 +545,7 @@ export async function rerunOcrForSubmission({
       mimeType: submission.mime_type,
       transactionNote: submission.transaction_note,
       customerJournalPrompt: customer.journal_prompt,
+      businessContextLines: getBusinessContextLines(customer),
     });
 
     if (ocr.status !== "completed") {
@@ -576,6 +595,7 @@ export async function rerunOcrForSubmission({
       transactionNote: submission.transaction_note,
       ocr: ocr.result,
       customerJournalPrompt: customer.journal_prompt,
+      businessContextLines: getBusinessContextLines(customer),
       suspenseAccountId: customer.suspense_account_id,
       suspenseAccountName: customer.suspense_account_name,
     });
@@ -801,6 +821,7 @@ export async function processCustomerPendingOcr({
         submission,
         file,
         customerJournalPrompt: customer.journal_prompt,
+      businessContextLines: getBusinessContextLines(customer),
       });
 
       // 予測仕訳はOCR直後に作って保存する。利用者が履歴画面で内容を確認し、
@@ -816,6 +837,7 @@ export async function processCustomerPendingOcr({
         transactionNote: submission.transaction_note,
         ocr,
         customerJournalPrompt: customer.journal_prompt,
+      businessContextLines: getBusinessContextLines(customer),
         suspenseAccountId: customer.suspense_account_id,
         suspenseAccountName: customer.suspense_account_name,
       });
@@ -888,6 +910,7 @@ export async function processCustomerPendingJournalPreviews({
       transactionNote: submission.transaction_note,
       ocr,
       customerJournalPrompt: customer.journal_prompt,
+      businessContextLines: getBusinessContextLines(customer),
       suspenseAccountId: customer.suspense_account_id,
       suspenseAccountName: customer.suspense_account_name,
     });
@@ -937,6 +960,7 @@ export async function forceSendJournalOnly({
       transactionNote: submission.transaction_note,
       ocr,
       customerJournalPrompt: customer.journal_prompt,
+      businessContextLines: getBusinessContextLines(customer),
       suspenseAccountId: customer.suspense_account_id,
       suspenseAccountName: customer.suspense_account_name,
       storedPreview:
@@ -1018,6 +1042,7 @@ export async function processSubmissionToMoneyForward({
       submission,
       file,
       customerJournalPrompt: customer.journal_prompt,
+      businessContextLines: getBusinessContextLines(customer),
     });
     const hadExistingDriveFile = Boolean(submission.drive_file_id);
 
@@ -1039,6 +1064,7 @@ export async function processSubmissionToMoneyForward({
       transactionNote: submission.transaction_note,
       ocr,
       customerJournalPrompt: customer.journal_prompt,
+      businessContextLines: getBusinessContextLines(customer),
       suspenseAccountId: customer.suspense_account_id,
       suspenseAccountName: customer.suspense_account_name,
       storedPreview:

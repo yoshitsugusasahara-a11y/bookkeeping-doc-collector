@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { getMoneyForwardAccounts } from "@/lib/moneyforward/client";
 import { resolveMoneyForwardAccessToken } from "@/lib/moneyforward/connection";
 import { buildClearedMfJournalPreviewFields } from "@/lib/moneyforward/journal-preview";
+import { fetchAndStoreMoneyForwardOffice } from "@/lib/moneyforward/office";
 import {
   ADMIN_SEND_BLOCKED_MESSAGE,
   canAdminSend,
@@ -337,6 +338,68 @@ export async function updateCustomerSuspenseAccount(
       ? `仮計上科目を「${trimmedName}」に設定しました。`
       : "仮計上科目の設定を解除しました。",
   };
+}
+
+export async function updateCustomerBusinessDescription(
+  _prevState: JournalPromptState,
+  formData: FormData,
+): Promise<JournalPromptState> {
+  const customerId = String(formData.get("customerId") || "");
+  const businessDescription = String(
+    formData.get("businessDescription") || "",
+  ).trim();
+
+  if (!customerId) {
+    return { status: "error", message: "顧客情報を取得できませんでした。" };
+  }
+
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  const { error } = await supabase
+    .from("customer_accounts")
+    .update({ business_description: businessDescription || null })
+    .eq("id", customerId);
+
+  if (error) {
+    return {
+      status: "error",
+      message: `業種・事業内容を保存できませんでした。${getErrorMessage(error)}`,
+    };
+  }
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  return { status: "success", message: "業種・事業内容を保存しました。" };
+}
+
+/** MFから事業者情報を取り直す。内容が変わることは稀なため、手動操作で更新する。 */
+export async function refreshCustomerMfOffice(
+  customerId: string,
+): Promise<{ status: "success" | "error"; message: string }> {
+  if (!customerId) {
+    return { status: "error", message: "顧客情報を取得できませんでした。" };
+  }
+
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  const result = await fetchAndStoreMoneyForwardOffice({
+    supabase,
+    customerAccountId: customerId,
+  });
+
+  revalidatePath(`/admin/customers/${customerId}`);
+
+  return result.status === "success"
+    ? { status: "success", message: "事業者情報を取得しました。" }
+    : {
+        status: "error",
+        message: result.message ?? "事業者情報を取得できませんでした。",
+      };
 }
 
 export async function updateCustomerRetentionSettings(

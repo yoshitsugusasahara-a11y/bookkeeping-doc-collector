@@ -147,6 +147,7 @@ export async function generateMfJournalPreview({
   customerJournalPrompt = null,
   suspenseAccountId = null,
   suspenseAccountName = null,
+  businessContextLines = [],
 }: {
   supabase: SupabaseClient<Database>;
   customerAccountId: string;
@@ -158,6 +159,7 @@ export async function generateMfJournalPreview({
   customerJournalPrompt?: string | null;
   suspenseAccountId?: string | null;
   suspenseAccountName?: string | null;
+  businessContextLines?: string[];
 }): Promise<MfJournalPreview | null> {
   const accessToken = await resolveMoneyForwardAccessToken({
     supabase,
@@ -220,6 +222,7 @@ export async function generateMfJournalPreview({
     accounts: accounts as never[],
     taxes,
     suspenseAccountId: resolvedSuspenseAccountId,
+    businessContextLines,
   });
 
   const lookups = buildNameLookups(accounts, taxes);
@@ -259,6 +262,7 @@ export async function generateAndStoreMfJournalPreview({
   customerJournalPrompt = null,
   suspenseAccountId = null,
   suspenseAccountName = null,
+  businessContextLines = [],
 }: {
   supabase: SupabaseClient<Database>;
   customerAccountId: string;
@@ -271,6 +275,7 @@ export async function generateAndStoreMfJournalPreview({
   customerJournalPrompt?: string | null;
   suspenseAccountId?: string | null;
   suspenseAccountName?: string | null;
+  businessContextLines?: string[];
 }): Promise<MfJournalPreview | null> {
   try {
     const preview = await generateMfJournalPreview({
@@ -284,6 +289,7 @@ export async function generateAndStoreMfJournalPreview({
       customerJournalPrompt,
       suspenseAccountId,
       suspenseAccountName,
+      businessContextLines,
     });
 
     if (!preview) {
