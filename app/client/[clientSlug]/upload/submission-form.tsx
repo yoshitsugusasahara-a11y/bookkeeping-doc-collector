@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, FileImage, Loader2, Send, X } from "lucide-react";
+import { shrinkImageForUpload } from "@/lib/images/shrink-image";
 import { createSubmission, type UploadState } from "./actions";
 
 type SubmissionFormProps = {
@@ -168,6 +169,7 @@ export function SubmissionForm({ clientSlug }: SubmissionFormProps) {
     const targets = filesRef.current;
     let successCount = 0;
     let errorCount = 0;
+    let shrunkCount = 0;
 
     for (const target of targets) {
       setFiles((prev) =>
@@ -178,9 +180,48 @@ export function SubmissionForm({ clientSlug }: SubmissionFormProps) {
         ),
       );
 
+      // 上限を超えるファイルはサーバーへ届く前に弾かれ、原因の分からない
+      // エラーになる。送信前にここで縮小し、縮小できない場合は理由を示す。
+      let uploadFile = target.file;
+      try {
+        const shrinkResult = await shrinkImageForUpload(target.file);
+        if (
+          shrinkResult.status === "unsupported" ||
+          shrinkResult.status === "too_large"
+        ) {
+          errorCount += 1;
+          setFiles((prev) =>
+            prev.map((item) =>
+              item.id === target.id
+                ? { ...item, status: "error", errorMessage: shrinkResult.reason }
+                : item,
+            ),
+          );
+          continue;
+        }
+        if (shrinkResult.status === "shrunk") shrunkCount += 1;
+        uploadFile = shrinkResult.file;
+      } catch (shrinkError) {
+        console.error("Failed to shrink image", shrinkError);
+        errorCount += 1;
+        setFiles((prev) =>
+          prev.map((item) =>
+            item.id === target.id
+              ? {
+                  ...item,
+                  status: "error",
+                  errorMessage:
+                    "画像の準備中にエラーが発生しました。時間をおいて再度お試しください。",
+                }
+              : item,
+          ),
+        );
+        continue;
+      }
+
       const formData = new FormData();
       formData.append("transactionNote", target.note);
-      formData.append("receiptFile", target.file);
+      formData.append("receiptFile", uploadFile);
       formData.append("thumbnailDataUrl", target.thumbnailDataUrl);
 
       try {
@@ -223,10 +264,14 @@ export function SubmissionForm({ clientSlug }: SubmissionFormProps) {
     }
 
     setIsSubmitting(false);
+    const shrunkNote =
+      shrunkCount > 0
+        ? `（うち${shrunkCount}件はサイズが大きいため縮小して送信しました）`
+        : "";
     setSummary(
       errorCount > 0
-        ? `${successCount}件送信しました。${errorCount}件は失敗しました。内容を確認して再送信してください。`
-        : `${successCount}件の送信が完了しました。`,
+        ? `${successCount}件送信しました。${errorCount}件は失敗しました。内容を確認して再送信してください。${shrunkNote}`
+        : `${successCount}件の送信が完了しました。${shrunkNote}`,
     );
   }
 
