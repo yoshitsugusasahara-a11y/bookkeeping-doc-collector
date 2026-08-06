@@ -169,7 +169,7 @@ export async function getMoneyForwardTaxes(accessToken: string) {
 }
 
 export type MoneyForwardOffice = {
-  /** "INDIVIDUAL"（個人事業主）または法人を表す値 */
+  /** "INDIVIDUAL"（個人事業主）または "CORPORATION"（法人） */
   type?: string | null;
   /** 製造業かどうか（製造原価科目を使うかの判断材料） */
   is_manufacturing?: boolean | null;
@@ -181,11 +181,13 @@ export type MoneyForwardOffice = {
 /**
  * 事業者情報を取得する。仕訳の背景情報として使う。
  * 内容が変わることは稀なため、呼び出し側でDBへ保存して使い回す。
+ *
+ * パスは複数形の /api/v3/offices（単数形の /api/v3/office は存在しない）。
  */
 export async function getMoneyForwardOffice(accessToken: string) {
   return moneyForwardAccountingFetch({
     accessToken,
-    path: "/api/v3/office",
+    path: "/api/v3/offices",
   }) as Promise<MoneyForwardOffice & { office?: MoneyForwardOffice }>;
 }
 
