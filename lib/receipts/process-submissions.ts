@@ -24,6 +24,7 @@ import { explainMfError } from "@/lib/moneyforward/error-message";
 import {
   buildClearedMfJournalPreviewFields,
   generateAndStoreMfJournalPreview,
+  resolveTransactionDate,
   type MfJournalPreview,
 } from "@/lib/moneyforward/journal-preview";
 import {
@@ -395,8 +396,14 @@ function buildReceiptDriveFileName({
     submission.mime_type,
     submission.file_name || "receipt",
   );
+  const { date, isFromSubmission } = resolveTransactionDate({
+    ocrDate: ocr.date,
+    submittedAt: submission.submitted_at,
+  });
+
   return buildVoucherFileName({
-    date: ocr.date,
+    date,
+    isDateFromSubmission: isFromSubmission,
     amount: ocr.amount,
     isCreditCard: ocr.is_credit_card,
     extension,

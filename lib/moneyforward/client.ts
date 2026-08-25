@@ -213,19 +213,28 @@ export async function postMoneyForwardVouchers({
 
 export function buildVoucherFileName({
   date,
+  isDateFromSubmission = false,
   amount,
   isCreditCard,
   extension,
 }: {
   date: string | null;
+  /**
+   * 日付をレシートから読み取れず、送信日で代用したか。
+   * 代用した場合は日付の末尾に x を付け、印字された日付と区別できるようにする。
+   * 資料を日付で整理する仕組みが日付を読み取れるよう、桁数は変えない。
+   */
+  isDateFromSubmission?: boolean;
   amount: number | null;
   isCreditCard: boolean | null;
   extension: string;
 }) {
   const compactDate = (date || "unknown-date").replaceAll("-", "");
+  const dateText =
+    date && isDateFromSubmission ? `${compactDate}x` : compactDate;
   const amountText = typeof amount === "number" ? String(amount) : "unknown";
   const payment = isCreditCard ? "CC" : "cash";
-  return `${compactDate}_${amountText}_${payment}.${extension}`;
+  return `${dateText}_${amountText}_${payment}.${extension}`;
 }
 
 export function getExtensionFromMimeType(mimeType: string, fileName: string) {

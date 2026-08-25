@@ -80,6 +80,25 @@ function formatSubmittedAtDate(value: string) {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * MFへ送る取引日を決める。レシートから日付を読み取れなかった場合は、
+ * 送信日を仮の取引日として使う。
+ *
+ * 証憑ファイル名もこの値から作ること。以前はファイル名だけが ocr.date を直接
+ * 見ていたため、日付が読めない資料は「仕訳の取引日は送信日／ファイル名は
+ * unknowndate」と食い違い、ファイル名から日付が読めずに整理から漏れていた。
+ */
+export function resolveTransactionDate({
+  ocrDate,
+  submittedAt,
+}: {
+  ocrDate: string | null;
+  submittedAt: string;
+}) {
+  if (ocrDate) return { date: ocrDate, isFromSubmission: false };
+  return { date: formatSubmittedAtDate(submittedAt), isFromSubmission: true };
+}
+
 function buildNameLookups(accounts: MfAccountLike[], taxes: MfTaxLike[]) {
   const accountNameById = new Map<string, string>();
   const subAccountNameById = new Map<string, string>();
@@ -203,20 +222,23 @@ export async function generateMfJournalPreview({
     ? (taxesResponse.taxes as MfTaxLike[])
     : [];
 
+  const { date: transactionDate, isFromSubmission: isDateFromSubmission } =
+    resolveTransactionDate({ ocrDate: ocr.date, submittedAt });
+
   const voucherFileName = buildVoucherFileName({
-    date: ocr.date,
+    date: transactionDate,
+    isDateFromSubmission,
     amount: ocr.amount,
     isCreditCard: ocr.is_credit_card,
     extension: getExtensionFromMimeType(mimeType, fileName || "receipt"),
   });
-  const transactionDate = ocr.date || formatSubmittedAtDate(submittedAt);
 
   const journal = await generateMfJournalWithGemini({
     ocr,
     transactionNote,
     voucherFileName,
     transactionDate,
-    needsDateConfirmation: !ocr.date,
+    needsDateConfirmation: isDateFromSubmission,
     submissionTimestampLabel: formatSubmittedAt(submittedAt),
     customerJournalPrompt,
     accounts: accounts as never[],
