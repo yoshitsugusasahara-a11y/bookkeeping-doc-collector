@@ -127,6 +127,29 @@ function normalizeTaxBreakdown(
   return { taxBreakdown: merged, hasMultipleTaxRates, needsTaxRateReview: false };
 }
 
+/**
+ * OCRが返した日付を YYYY-MM-DD として検証する。通らないものは null に落とす。
+ *
+ * 「年が不明なら null」という指示を、Geminiが年の位置だけを null にすると
+ * 解釈して "null-07-27" のような文字列を返すことがある。空でない文字列なので
+ * 後段の truthy 判定をすべて素通りし、MFへ送って初めて弾かれる。ここで null に
+ * しておけば、送信日を仮の取引日として使う既存の受け皿が正しく働く。
+ */
+function normalizeOcrDate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(trimmed)) return null;
+
+  // 2026-02-31 のような存在しない日付はDateが繰り上げてしまうため、
+  // 往復させて元の文字列と一致するかを確認する。
+  const parsed = new Date(`${trimmed}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (parsed.toISOString().slice(0, 10) !== trimmed) return null;
+
+  return trimmed;
+}
+
 function normalizeOcrResult(value: unknown): ReceiptOcrResult {
   const input = value && typeof value === "object" ? value : {};
   const record = input as Record<string, unknown>;
@@ -166,7 +189,7 @@ function normalizeOcrResult(value: unknown): ReceiptOcrResult {
       : null;
 
   return {
-    date: typeof record.date === "string" && record.date ? record.date : null,
+    date: normalizeOcrDate(record.date),
     amount: normalizedAmount,
     store: typeof record.store === "string" && record.store ? record.store : null,
     summary:
@@ -238,7 +261,7 @@ export async function analyzeReceiptWithGemini({
                     "あなたは日本の領収書・レシートを読み取るOCRアシスタントです。",
                     "添付画像またはPDFから、以下のJSONだけを返してください。",
                     "推測が難しい項目は null にしてください。金額は税込合計を整数で返してください。",
-                    "日付は YYYY-MM-DD 形式にしてください。年が不明な場合は null にしてください。",
+                    "日付は YYYY-MM-DD 形式にしてください。年・月・日のいずれか一つでも読み取れない場合は、date 項目全体を null にしてください。「null-07-27」のように一部だけを null という文字にした値は返さないでください。",
                     "支払方法がクレジットカード、カード、VISA、Mastercard、JCB、AMEX、交通系IC等なら is_credit_card を true、現金なら false、不明なら null にしてください。",
                     "レシートに消費税率の印字がある場合は、8%のみ・10%のみ・混在のいずれの場合も、税率ごとの税込合計金額を tax_breakdown 配列に含めてください。",
                     "- 「8%対象」「軽減税率対象」「内消費税等 8.0%」「内消費税 8%」等、8%を示す記載がある → その税率区分の税込小計を rate: 8 として追加。",
