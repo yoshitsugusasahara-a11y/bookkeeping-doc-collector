@@ -14,6 +14,10 @@ import {
 import { DeleteSubmissionButton } from "@/components/delete-submission-button";
 import { JournalPreviewTable } from "@/components/journal-preview-table";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
+import {
+  explainMfError,
+  supportFormUrl,
+} from "@/lib/moneyforward/error-message";
 import type { MfJournalPreview } from "@/lib/moneyforward/journal-preview";
 import { processCustomerPendingOcr } from "@/lib/receipts/process-submissions";
 import { resolveSendMode } from "@/lib/receipts/send-mode";
@@ -360,6 +364,9 @@ export default async function ClientSubmissionsPage({
           const isSent = item.mf_status === "sent";
           const canSendToMf =
             item.ocr_status === "completed" && item.mf_status !== "sent";
+          // 生のエラー文言は顧客には出さず、意味の分かる文言に置き換える。
+          // 管理者画面では引き続き生の文言を表示する。
+          const mfErrorInfo = explainMfError(item.mf_error);
 
           return (
             <article className="submission-row" key={item.id}>
@@ -529,8 +536,23 @@ export default async function ClientSubmissionsPage({
                 {item.ocr_error && (
                   <small className="warning-text">OCR: {item.ocr_error}</small>
                 )}
-                {item.mf_error && (
-                  <small className="warning-text">MF: {item.mf_error}</small>
+                {mfErrorInfo && (
+                  <>
+                    <small className="warning-text">{mfErrorInfo.message}</small>
+                    <small className="warning-text">{mfErrorInfo.action}</small>
+                    {mfErrorInfo.needsSupport && (
+                      <small>
+                        <a
+                          className="inline-link"
+                          href={supportFormUrl}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          お問い合わせフォームを開く
+                        </a>
+                      </small>
+                    )}
+                  </>
                 )}
                 {!isSent && (
                   <DeleteSubmissionButton
