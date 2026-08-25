@@ -15,6 +15,10 @@ import { hideSubmission } from "./actions";
 import { JournalPreviewTable } from "@/components/journal-preview-table";
 import type { MfJournalPreview } from "@/lib/moneyforward/journal-preview";
 import { canAdminSend } from "@/lib/receipts/send-mode";
+import {
+  nonReceiptDocumentKinds,
+  receiptOrUnclassifiedFilter,
+} from "@/lib/receipts/submission-filters";
 import { deleteCustomerAccount } from "../actions";
 import { CustomerAccountActionButton } from "../customer-account-action-button";
 import { CustomerAccountToggleButton } from "../customer-account-toggle-button";
@@ -38,10 +42,15 @@ export const maxDuration = 60;
 
 const SUBMISSIONS_PER_PAGE = 50;
 
-type SubmissionFilter = "all" | "unsent" | "mf_failed" | "sent";
+type SubmissionFilter = "all" | "unsent" | "document" | "mf_failed" | "sent";
 
 function parseSubmissionFilter(value?: string): SubmissionFilter {
-  if (value === "all" || value === "mf_failed" || value === "sent") {
+  if (
+    value === "all" ||
+    value === "document" ||
+    value === "mf_failed" ||
+    value === "sent"
+  ) {
     return value;
   }
   return "unsent";
@@ -146,6 +155,7 @@ export default async function AdminCustomerDetailPage({
   const unsentOnly = currentFilter === "unsent";
   const mfFailedOnly = currentFilter === "mf_failed";
   const sentOnly = currentFilter === "sent";
+  const documentOnly = currentFilter === "document";
   const supabase = await createClient();
   const user = await getCurrentUserOrRedirect(supabase, "/admin/login");
 
@@ -178,8 +188,18 @@ export default async function AdminCustomerDetailPage({
     submissionQuery = submissionQuery.eq("mf_status", "failed");
   } else if (sentOnly) {
     submissionQuery = submissionQuery.eq("mf_status", "sent");
+  } else if (documentOnly) {
+    submissionQuery = submissionQuery.in(
+      "document_kind",
+      nonReceiptDocumentKinds,
+    );
   } else if (unsentOnly) {
-    submissionQuery = submissionQuery.neq("mf_status", "sent");
+    // 未送信は「送信されていないレシート」に限る。レシート以外と判定された
+    // 資料は mf_status が not_ready のまま据え置かれるため、送信状態だけで
+    // 絞ると混ざってしまう。
+    submissionQuery = submissionQuery
+      .neq("mf_status", "sent")
+      .or(receiptOrUnclassifiedFilter);
   }
 
   const [
@@ -188,6 +208,7 @@ export default async function AdminCustomerDetailPage({
     submissionResult,
     { count: allCount },
     { count: unsentCount },
+    { count: documentCount },
     { count: mfFailedCount },
     { count: sentCount },
     { count: trashCount },
@@ -206,7 +227,10 @@ export default async function AdminCustomerDetailPage({
       .order("submitted_at", { ascending: false })
       .range(rangeFrom, rangeFrom + SUBMISSIONS_PER_PAGE - 1),
     submissionCountQuery(),
-    submissionCountQuery().neq("mf_status", "sent"),
+    submissionCountQuery()
+      .neq("mf_status", "sent")
+      .or(receiptOrUnclassifiedFilter),
+    submissionCountQuery().in("document_kind", nonReceiptDocumentKinds),
     submissionCountQuery().eq("mf_status", "failed"),
     submissionCountQuery().eq("mf_status", "sent"),
     supabase
@@ -313,9 +337,11 @@ export default async function AdminCustomerDetailPage({
       ? mfFailedCount
       : sentOnly
         ? sentCount
-        : unsentOnly
-          ? unsentCount
-          : allCount) ?? 0;
+        : documentOnly
+          ? documentCount
+          : unsentOnly
+            ? unsentCount
+            : allCount) ?? 0;
   const totalPages = Math.max(
     1,
     Math.ceil(filteredCount / SUBMISSIONS_PER_PAGE),
@@ -724,6 +750,12 @@ export default async function AdminCustomerDetailPage({
                   未送信のみ表示（{unsentCount ?? 0}）
                 </a>
                 <a
+                  className={documentOnly ? "primary-action" : "secondary-action"}
+                  href={buildListHref("document")}
+                >
+                  レシート以外を表示（{documentCount ?? 0}）
+                </a>
+                <a
                   className={mfFailedOnly ? "primary-action" : "secondary-action"}
                   href={buildListHref("mf_failed")}
                 >
@@ -774,9 +806,11 @@ export default async function AdminCustomerDetailPage({
                     ? "MF送信エラーの送信履歴はありません。"
                     : sentOnly
                       ? "送信済みの送信履歴はありません。"
-                      : unsentOnly
-                        ? "未送信の送信履歴はありません。"
-                        : "送信履歴はまだありません。"}
+                      : documentOnly
+                        ? "レシート以外と判定された資料はありません。"
+                        : unsentOnly
+                          ? "未送信のレシートはありません。"
+                          : "送信履歴はまだありません。"}
                 </div>
               ))}
             {submissions.map((item) => {

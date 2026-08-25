@@ -17,6 +17,10 @@ import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import type { MfJournalPreview } from "@/lib/moneyforward/journal-preview";
 import { processCustomerPendingOcr } from "@/lib/receipts/process-submissions";
 import { resolveSendMode } from "@/lib/receipts/send-mode";
+import {
+  nonReceiptDocumentKinds,
+  receiptOrUnclassifiedFilter,
+} from "@/lib/receipts/submission-filters";
 import { createClient } from "@/lib/supabase/server";
 import {
   hideSubmissionAsCustomer,
@@ -121,13 +125,14 @@ export default async function ClientSubmissionsPage({
   searchParams: Promise<{
     sent?: string;
     ocr?: string;
-    filter?: "unsent" | "mf_failed";
+    filter?: "unsent" | "mf_failed" | "document";
   }>;
 }) {
   const { clientSlug } = await params;
   const { sent, ocr, filter } = await searchParams;
   const unsentOnly = filter === "unsent";
   const mfFailedOnly = filter === "mf_failed";
+  const documentOnly = filter === "document";
   const supabase = await createClient();
   const user = await getCurrentUserOrRedirect(
     supabase,
@@ -162,8 +167,18 @@ export default async function ClientSubmissionsPage({
 
   if (mfFailedOnly) {
     submissionQuery = submissionQuery.eq("mf_status", "failed");
+  } else if (documentOnly) {
+    submissionQuery = submissionQuery.in(
+      "document_kind",
+      nonReceiptDocumentKinds,
+    );
   } else if (unsentOnly) {
-    submissionQuery = submissionQuery.neq("mf_status", "sent");
+    // 未送信は「送信されていないレシート」に限る。レシート以外と判定された
+    // 資料は mf_status が not_ready のまま据え置かれるため、送信状態だけで
+    // 絞ると混ざってしまう。
+    submissionQuery = submissionQuery
+      .neq("mf_status", "sent")
+      .or(receiptOrUnclassifiedFilter);
   }
 
   const { data: submissionRows } = await submissionQuery;
@@ -180,6 +195,7 @@ export default async function ClientSubmissionsPage({
   const [
     { count: allCount },
     { count: unsentCount },
+    { count: documentCount },
     { count: mfFailedCount },
     { count: storedCount },
   ] = await Promise.all([
@@ -193,7 +209,14 @@ export default async function ClientSubmissionsPage({
       .select("id", { count: "exact", head: true })
       .eq("customer_account_id", account.id)
       .is("hidden_at", null)
-      .neq("mf_status", "sent"),
+      .neq("mf_status", "sent")
+      .or(receiptOrUnclassifiedFilter),
+    supabase
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_account_id", account.id)
+      .is("hidden_at", null)
+      .in("document_kind", nonReceiptDocumentKinds),
     supabase
       .from("submissions")
       .select("id", { count: "exact", head: true })
@@ -264,7 +287,9 @@ export default async function ClientSubmissionsPage({
       <div className="account-control-actions">
         <a
           className={
-            !unsentOnly && !mfFailedOnly ? "primary-action" : "secondary-action"
+            !unsentOnly && !mfFailedOnly && !documentOnly
+              ? "primary-action"
+              : "secondary-action"
           }
           href={`/client/${clientSlug}/submissions`}
         >
@@ -275,6 +300,12 @@ export default async function ClientSubmissionsPage({
           href={`/client/${clientSlug}/submissions?filter=unsent`}
         >
           未送信のみ表示（{unsentCount ?? 0}）
+        </a>
+        <a
+          className={documentOnly ? "primary-action" : "secondary-action"}
+          href={`/client/${clientSlug}/submissions?filter=document`}
+        >
+          レシート以外を表示（{documentCount ?? 0}）
         </a>
         <a
           className={mfFailedOnly ? "primary-action" : "secondary-action"}
@@ -316,9 +347,11 @@ export default async function ClientSubmissionsPage({
           <div className="empty-state">
             {mfFailedOnly
               ? "MF送信エラーの送信履歴はありません。"
-              : unsentOnly
-                ? "未送信の送信履歴はありません。"
-                : "送信履歴はまだありません。"}
+              : documentOnly
+                ? "レシート以外と判定された資料はありません。"
+                : unsentOnly
+                  ? "未送信のレシートはありません。"
+                  : "送信履歴はまだありません。"}
           </div>
         )}
         {submissions.map((item) => {
