@@ -20,6 +20,7 @@ import {
   type ActivitySource,
 } from "@/lib/logging/activity-log";
 import { submitReceiptToMoneyForward } from "@/lib/moneyforward/auto-submit";
+import { explainMfError } from "@/lib/moneyforward/error-message";
 import {
   buildClearedMfJournalPreviewFields,
   generateAndStoreMfJournalPreview,
@@ -34,6 +35,10 @@ import { resolveSendMode } from "@/lib/receipts/send-mode";
 import type { Database } from "@/lib/supabase/types";
 
 const receiptUploadBucket = "receipt_uploads";
+
+// 再試行の候補を探すために見に行く失敗済み資料の件数。恒久エラーばかりが
+// 並んでいても、その先にある再試行可能な資料へ届くようにするための余裕。
+const retryScanLimit = 50;
 const submissionProcessingColumns =
   "id, customer_account_id, transaction_note, file_name, mime_type, source_storage_path, submitted_at, drive_file_id, drive_view_url, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_tax_rates, ocr_needs_tax_rate_review, ocr_has_multiple_account_candidates, ocr_account_review_reason, mf_journal_preview, mf_journal_preview_status, mf_status";
 
@@ -1229,26 +1234,57 @@ export async function processCustomerPendingSubmissions({
     return { processed: 0, failed: 0, errors: [], skippedByMode: true };
   }
 
-  const { data: submissions, error } = await supabase
+  // 送信枠はまず「まだ送信を試していない資料」で埋める。
+  //
+  // 以前は mf_status が sent 以外のものを古い順に取っていたため、何度送っても
+  // 失敗する資料（会計期間外の日付など）が毎晩その枠を占有し、新しいレシートが
+  // 送られなくなっていた。枠と同数だけ詰まると自動送信が完全に止まる。
+  const { data: freshRows, error: freshError } = await supabase
     .from("submissions")
     .select("id")
     .eq("customer_account_id", customerId)
-    .neq("mf_status", "sent")
+    .in("mf_status", ["not_ready", "not_sent"])
     .not("source_storage_path", "is", null)
     .is("hidden_at", null)
     .order("submitted_at", { ascending: true })
     .limit(limit);
 
-  if (error) throw error;
+  if (freshError) throw freshError;
+
+  const targetIds = (freshRows ?? []).map((row) => row.id);
+
+  // 枠が余っていれば、失敗した資料の再試行に回す。ただし何度送っても結果が
+  // 変わらないものは除く。読み取り結果が編集されると mf_error が消えて
+  // mf_status も not_sent に戻るため、修正された資料はここを通らずに
+  // 上の「まだ試していない資料」として拾われる。
+  if (targetIds.length < limit) {
+    const { data: failedRows, error: failedError } = await supabase
+      .from("submissions")
+      .select("id, mf_error")
+      .eq("customer_account_id", customerId)
+      .eq("mf_status", "failed")
+      .not("source_storage_path", "is", null)
+      .is("hidden_at", null)
+      .order("submitted_at", { ascending: true })
+      .limit(retryScanLimit);
+
+    if (failedError) throw failedError;
+
+    for (const row of failedRows ?? []) {
+      if (targetIds.length >= limit) break;
+      if (explainMfError(row.mf_error)?.kind === "permanent") continue;
+      targetIds.push(row.id);
+    }
+  }
 
   let processed = 0;
   const errors: string[] = [];
-  for (const submission of submissions ?? []) {
+  for (const submissionId of targetIds) {
     try {
       await processSubmissionToMoneyForward({
         supabase,
         customerId,
-        submissionId: submission.id,
+        submissionId,
         source,
       });
       processed += 1;
