@@ -415,6 +415,11 @@ select {
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--ink);
+  /*
+   * 入力欄は既定で20文字分の固有幅を持つ。min-width を 0 にしておかないと、
+   * 狭いグリッドの列に入れたときに列を押し広げ、画面の外まではみ出す。
+   */
+  min-width: 0;
   outline: none;
 }
 
@@ -644,9 +649,9 @@ textarea {
 
 .submission-copy {
   display: grid;
+  flex: 1 1 auto;
   gap: 6px;
   min-width: 0;
-  width: 100%;
 }
 
 .submission-copy small,
@@ -1345,7 +1350,8 @@ textarea {
   .url-builder-grid,
   .document-rule-form,
   .document-rule-card,
-  .connection-details {
+  .connection-details,
+  .ocr-edit-form {
     grid-template-columns: 1fr;
   }
 
