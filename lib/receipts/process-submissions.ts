@@ -40,6 +40,15 @@ const receiptUploadBucket = "receipt_uploads";
 // 再試行の候補を探すために見に行く失敗済み資料の件数。恒久エラーばかりが
 // 並んでいても、その先にある再試行可能な資料へ届くようにするための余裕。
 const retryScanLimit = 50;
+
+// OCRの確保を諦めるまでの猶予。実行時間の上限で打ち切られた資料を、
+// いつまでも確保済みのまま放置しないための時間。
+const ocrClaimTimeoutMs = 3 * 60 * 1000;
+
+// 候補を limit より何件多く見るか。一括アップロードでは after() が同時に
+// いくつも走るため、候補が limit 件しかないと全員が同じ資料を奪い合い、
+// 負けた側が何もせずに終わってしまう。
+const ocrClaimScanMargin = 24;
 const submissionProcessingColumns =
   "id, customer_account_id, transaction_note, file_name, mime_type, source_storage_path, submitted_at, drive_file_id, drive_view_url, document_classification_status, document_kind, document_rule_id, document_confidence, document_error, document_drive_file_name, ocr_status, ocr_date, ocr_amount, ocr_store, ocr_summary, ocr_payment_method, ocr_is_credit_card, ocr_tax_rate_8_subtotal, ocr_tax_rate_10_subtotal, ocr_has_multiple_tax_rates, ocr_needs_tax_rate_review, ocr_has_multiple_account_candidates, ocr_account_review_reason, mf_journal_preview, mf_journal_preview_status, mf_status";
 
@@ -806,13 +815,29 @@ export async function processCustomerPendingOcr({
    */
   submittedBefore?: string | null;
 }) {
+  // 同じ資料を複数の処理が同時に掴まないよう、1件ずつ条件付きUPDATEで
+  // 確保してから処理する。確保の印には ocr_processed_at を使う（この列は
+  // 画面に出ておらず、意味は「最後に処理を試みた時刻」になる）。
+  //
+  // 印がないと、アップロードのたびに起動するバックグラウンド処理が全員で
+  // 同じ最古の資料を重複処理し、残りに誰も手を付けないまま終わる。
+  // OCRは1件10〜20秒かかるのに対しアップロードの応答は数秒で返るため、
+  // 処理が重なるのが常態だった。
+  // ミリ秒を落とす。PostgRESTのフィルタ文字列は「列.演算子.値」をドットで
+  // 区切るため、値に余分なドットを入れない方が解釈の曖昧さがない。
+  const claimCutoff = new Date(Date.now() - ocrClaimTimeoutMs)
+    .toISOString()
+    .replace(/.d{3}Z$/, "Z");
+  const claimableFilter = `ocr_processed_at.is.null,ocr_processed_at.lt.${claimCutoff}`;
+
   let query = supabase
     .from("submissions")
     .select(submissionProcessingColumns)
     .eq("customer_account_id", customerId)
     .in("ocr_status", ["pending", "failed"])
     .not("source_storage_path", "is", null)
-    .is("hidden_at", null);
+    .is("hidden_at", null)
+    .or(claimableFilter);
 
   if (submittedBefore) {
     query = query.lt("submitted_at", submittedBefore);
@@ -820,12 +845,34 @@ export async function processCustomerPendingOcr({
 
   const { data: submissions, error } = await query
     .order("submitted_at", { ascending: true })
-    .limit(limit);
+    .limit(limit + ocrClaimScanMargin);
 
   if (error) throw error;
 
   let processed = 0;
+  // 確保できた件数で打ち切る。失敗した資料も1件分の時間を使っているため、
+  // 成功数で数えると実行時間の見積もりが狂う。
+  let claimed = 0;
   for (const submission of (submissions ?? []) as SubmissionRow[]) {
+    if (claimed >= limit) break;
+
+    const { data: claimedRows, error: claimError } = await supabase
+      .from("submissions")
+      .update({ ocr_processed_at: new Date().toISOString() })
+      .eq("id", submission.id)
+      .in("ocr_status", ["pending", "failed"])
+      .or(claimableFilter)
+      .select("id");
+
+    if (claimError) {
+      console.error("Failed to claim submission for OCR", claimError);
+      continue;
+    }
+
+    // 0件更新は、他の処理が先に確保したということ。次の候補へ進む。
+    if (!claimedRows || claimedRows.length === 0) continue;
+    claimed += 1;
+
     try {
       const file = await downloadStoredFile({ supabase, submission });
       const customer = await getCustomerDriveSettings({
