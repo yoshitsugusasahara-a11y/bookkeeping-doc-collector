@@ -2,6 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
+import {
+  isGoogleDriveConfigured,
+  verifyDriveFolder,
+  type DriveFolderCheck,
+} from "@/lib/google/drive";
 import { getMoneyForwardAccounts } from "@/lib/moneyforward/client";
 import { resolveMoneyForwardAccessToken } from "@/lib/moneyforward/connection";
 import { buildClearedMfJournalPreviewFields } from "@/lib/moneyforward/journal-preview";
@@ -71,6 +76,19 @@ async function ensureAdmin() {
   return supabase;
 }
 
+function describeDriveFolderCheck(check: DriveFolderCheck) {
+  if (check.status === "not_found") {
+    return "そのIDのフォルダが見つかりません。IDは1文字でも欠けると一致しません。Driveでフォルダを開いたときのURLの末尾を、余さずコピーしてください。";
+  }
+  if (check.status === "not_a_folder") {
+    return "指定されたIDはフォルダではありません。ファイルのIDになっていないか確認してください。";
+  }
+  if (check.status === "not_writable") {
+    return "このフォルダへ書き込む権限がありません。連携アカウントに共有されているか確認してください。";
+  }
+  return check.status === "unknown_error" ? check.message : "";
+}
+
 export async function updateCustomerDriveSettings(
   _prevState: DriveSettingsState,
   formData: FormData,
@@ -98,6 +116,35 @@ export async function updateCustomerDriveSettings(
   const supabase = await ensureAdmin();
   if (!supabase) {
     return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  // フォルダIDは、実在と書き込み権限を確認してから保存する。実行時と同じ
+  // 資格情報で確認するので、ここを通れば実際に書き込める。
+  //
+  // 検証しないと、IDを1文字欠いて貼り付けても保存できてしまい、資料の送信時に
+  // 初めて「File not found」で失敗する。顧客画面には理由が出ないため、
+  // 気づかないまま溜まり続ける（2026-09-07に19件が送信失敗した）。
+  if (isGoogleDriveConfigured()) {
+    const folderFields = [
+      { label: "保存先フォルダID", value: driveFolderId },
+      { label: "エラーフォルダID", value: errorDriveFolderId },
+      {
+        label: "ルールが存在しない資料フォルダID",
+        value: irregularDriveFolderId,
+      },
+    ];
+
+    for (const field of folderFields) {
+      if (!field.value) continue;
+
+      const check = await verifyDriveFolder(field.value);
+      if (check.status === "ok") continue;
+
+      return {
+        status: "error",
+        message: `${field.label}を確認できませんでした。${describeDriveFolderCheck(check)}`,
+      };
+    }
   }
 
   const { error } = await supabase

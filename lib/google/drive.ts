@@ -31,6 +31,78 @@ function createDriveClient() {
   return google.drive({ version: "v3", auth });
 }
 
+export type DriveFolderCheck =
+  | { status: "ok"; name: string }
+  | { status: "not_found" }
+  | { status: "not_a_folder" }
+  | { status: "not_writable" }
+  | { status: "unknown_error"; message: string };
+
+function getHttpStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object") return null;
+  const candidate = error as {
+    code?: unknown;
+    status?: unknown;
+    response?: { status?: unknown };
+  };
+  for (const value of [
+    candidate.status,
+    candidate.code,
+    candidate.response?.status,
+  ]) {
+    if (typeof value === "number") return value;
+    if (typeof value === "string" && /^d+$/.test(value)) return Number(value);
+  }
+  return null;
+}
+
+/**
+ * フォルダIDが実在し、このアプリの資格情報で書き込めるかを確認する。
+ *
+ * 設定画面で保存する前に呼ぶ。IDを1文字欠いて貼り付けても保存できてしまうと、
+ * 資料の送信時に初めて「File not found」で失敗し、顧客にも管理者にも原因が
+ * 分からないまま溜まり続ける（2026-09-07に実際に発生し、19件が送信失敗した）。
+ *
+ * 実行時と同じ資格情報で確認するため、ここを通れば実際に書き込める。
+ */
+export async function verifyDriveFolder(
+  folderId: string,
+): Promise<DriveFolderCheck> {
+  const drive = createDriveClient();
+
+  try {
+    const response = await drive.files.get({
+      fileId: folderId,
+      fields: "id, name, mimeType, trashed, capabilities/canAddChildren",
+      supportsAllDrives: true,
+    });
+
+    const folder = response.data;
+
+    if (folder.trashed) return { status: "not_found" };
+    if (folder.mimeType !== "application/vnd.google-apps.folder") {
+      return { status: "not_a_folder" };
+    }
+    if (folder.capabilities?.canAddChildren === false) {
+      return { status: "not_writable" };
+    }
+
+    return { status: "ok", name: folder.name ?? "" };
+  } catch (error) {
+    const httpStatus = getHttpStatus(error);
+    if (httpStatus === 404) return { status: "not_found" };
+    if (httpStatus === 403) return { status: "not_writable" };
+
+    return {
+      status: "unknown_error",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Google Driveのフォルダを確認できませんでした。",
+    };
+  }
+}
+
 export async function uploadFileToDrive({
   file,
   folderId,
