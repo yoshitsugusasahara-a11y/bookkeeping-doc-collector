@@ -65,21 +65,61 @@ Queuesなら 1レシート＝1メッセージ、可視性タイムアウトが�
 
 - [x] **0-1. リポジトリ名 = `bookkeeping-doc-collector-cf`**
 - [x] 0-2. **まず無料プランで始め、必要になった時点で有料へ切り替える**
-  - ただし **Queues は有料プラン（Workers Paid）が必要**。したがってフェーズ3-3は有料化まで着手できない
-  - あわせて **無料プランのCPU時間上限（1リクエストあたり10ms）** がNext.jsのサーバーレンダリングに対して厳しい可能性がある。ローカルの `wrangler dev` では上限がかからないため、**3-1で本番デプロイして初めて判明する**。ここが切り替えの判断点になる
-  - 無料で進められるのは 3-1（ローカル）・3-2・3-4・3-5
+  - **2026-09-09に Workers Paid（$5/月＋従量）へ切り替え済み。** これで下記2点の保留が解消した
+    - **Queues が使えるようになった** → フェーズ3-3に着手可能
+    - **CPU時間の上限が 10ms から5分になった** → 「無料プランではNext.jsのサーバーレンダリングが厳しいかもしれない」という懸念は消滅。実際に雛形をデプロイして表示を確認済み
 - [x] 0-3. **独自ドメインを取得し、サブドメインで運用する**（技術的な問題はない）
   - **ホスト名は認証の設定より前に確定させる。** Google OAuth と Money Forward の両方にリダイレクトURIを登録するため、後から変えると二重の手戻りになる
   - DNSをCloudflareで管理できるかを先に確認する。既存の会社ドメインのサブドメインにする場合はDNSレコードの追加に社内調整が必要
   - 検証用のホスト名を別に用意し、本番オリジンを安定させる（`*.workers.dev` で足りる）
 
-### フェーズ1: 環境の用意
+### フェーズ1: 環境の用意（2026-09-09 完了。1-5を除く）
 
-- [ ] 1-1. GitHubで新リポジトリを作成（private）— **担当: ユーザー**（`gh` CLI未導入のためClaudeからは作れない）
-- [ ] 1-2. 新しい作業フォルダにクローン — Claude（パスの指定をもらう）
-- [ ] 1-3. `npx wrangler login` — **担当: ユーザー**（ブラウザ認証）
-- [ ] 1-4. Next.js + `@opennextjs/cloudflare` の雛形作成とデプロイ疎通 — Claude
-- [ ] 1-5. シークレットの置き方の整備（`wrangler secret`）と `.gitignore` — Claude
+- [x] 1-1. GitHubで新リポジトリを作成（private）— `yoshitsugusasahara-a11y/bookkeeping-doc-collector-cf`
+- [x] 1-2. 新しい作業フォルダにクローン — `C:/Users/user/Documents/GitHub/bookkeeping-doc-collector-cf`
+- [x] 1-3. `npx wrangler login` — 完了（アカウントID `1bb3e8b2ae7c0c61808221c936f89641`）
+- [x] 1-4. Next.js + `@opennextjs/cloudflare` の雛形作成とデプロイ疎通 — **完了**
+  - 公開URL: `https://bookkeeping-doc-collector-cf.yoshitsugu-sasahara.workers.dev`（雛形ページの表示を確認）
+  - Next.js **16.3.4** / `@opennextjs/cloudflare` 1.20.6 / wrangler 4.129
+  - バインディングは `ASSETS` / `IMAGES` / `WORKER_SELF_REFERENCE` の3つ（D1・R2・Queuesはフェーズ3で追加）
+  - `compatibility_date` 2026-09-01、フラグ `nodejs_compat` `global_fetch_strictly_public`
+- [x] **1-6. Git連携ビルド（Workers Builds）を設定** — 計画に無かったが追加した（理由は下記）
+  - Build command: `npx opennextjs-cloudflare build`
+    - **`npm run build` では動かない。** `next build` だけが走って `.next/` しか作られず、`wrangler.jsonc` の `main` が指す `.open-next/worker.js` ができないためデプロイが失敗する
+  - Deploy command: `npx wrangler deploy` / Version command: `npx wrangler versions upload` / Root directory: `/`
+  - Production branch `main`、非本番ブランチのビルドも有効
+  - **`main` へのプッシュでビルドとデプロイが走る。手元からのデプロイは不要。**
+- [ ] 1-5. シークレットの置き方の整備（`wrangler secret`）と `.gitignore`
+  - **値の登録はユーザーが行う。** Claudeは認証情報を扱わない
+  - 必要になるのはフェーズ3以降（Gemini APIキー、MF・Google のクライアントシークレットなど）
+
+#### 1-6を追加した理由（Windowsビルドを本番経路から外す）
+
+ローカルの `opennextjs-cloudflare build` は成功するが、次の警告が出る。
+
+```
+WARN OpenNext is not fully compatible with Windows.
+WARN For optimal performance, it is recommended to use WSL.
+WARN While OpenNext may function on Windows, it could encounter unpredictable failures during runtime.
+```
+
+手元からデプロイすると、**このPCでビルドした成果物がそのまま本番へ出る。** 現行のVercelはビルドがVercel側のLinuxで走っており、ローカル環境は本番の成果物に関与していない。Cloudflare側も同じ形に揃えるべきと判断した。WSLを導入する案より、**本番の成果物をローカル環境に依存させない**ほうが本質的。ローカルは `wrangler dev` での確認に使う。
+
+#### 運用の取り決め（2026-09-09 ユーザー指示）
+
+**ユーザーはターミナル操作を行わない。** 調査・設定画面の入力・画面遷移・コマンド実行はClaudeが行う（ブラウザ操作を含む）。ユーザーに依頼するのは次の3種類だけ。
+
+1. **認可・同意**（OAuth許可、規約同意、GitHub Appのインストール）
+2. **認証**（パスワード入力、アカウント作成）
+3. **課金**（プラン申し込み、支払い情報）
+
+なお **Claudeの自動許可判定は外部公開を伴う操作を止める。** 手元からの `npm run deploy` は実際にブロックされた（1-6のGit連携により、そもそも不要になった）。同様に **Claudeが自分の権限設定を書き換えることもできない。** 権限ルールを足す必要が生じた場合は `~/.claude/settings.json` をユーザーが編集する。
+
+#### まだ決まっていないこと
+
+- **ホスト名（0-3）** — フェーズ3-5（Better Auth + Google OAuth）より前に確定させる。独自ドメインを新規取得するか、会社ドメイン（000g.jp）のサブドメインにするか。検証中は `*.workers.dev` で足りる
+- **Observability が無効** — Workers Logs / Traces がどちらも Disabled。フェーズ3のスパイクではログが必要になるので、着手時に有効化を検討する（有料プランの従量課金対象）
+- **Next.js のバージョン差** — 現行は15、新規は**16.3.4**。`lib/` のコードを持ち込む際に Server Actions や `after()` の扱いに差分が出る可能性がある。フェーズ3-1の確認項目に含める
 
 ### フェーズ2: 知識の引き継ぎ（担当: Claude）
 
