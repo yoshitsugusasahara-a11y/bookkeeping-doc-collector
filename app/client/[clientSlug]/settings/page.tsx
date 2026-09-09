@@ -139,6 +139,7 @@ export default async function ClientSettingsPage({
           fiscalYear={account.mf_fiscal_year}
           options={fiscalYearOptions}
           fetchedAt={null}
+          emptyStateMessage="送信先の会計年度は、現在の会計年度が自動で使われます。変更が必要な場合は担当者へご連絡ください。"
           save={updateFiscalYear.bind(null, clientSlug)}
         />
       </section>

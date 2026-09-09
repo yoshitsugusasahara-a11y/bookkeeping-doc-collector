@@ -21,11 +21,17 @@ export function FiscalYearForm({
   fiscalYear,
   options,
   fetchedAt,
+  emptyStateMessage,
   save,
 }: {
   fiscalYear: number | null;
   options: FiscalYearOption[];
   fetchedAt: string | null;
+  /**
+   * 会計年度が未取得のときの文言。事業者情報を取得できるのは管理者だけなので、
+   * 顧客には別の案内を出す（既定の文言のままだと対処できない指示になる）。
+   */
+  emptyStateMessage?: string;
   save: (
     fiscalYear: number | null,
   ) => Promise<{ status: "success" | "error"; message?: string }>;
@@ -82,7 +88,8 @@ export function FiscalYearForm({
   if (options.length === 0) {
     return (
       <p className="warning-text">
-        マネーフォワードから会計年度を取得できていません。連携を確認し、事業者情報を取得してください。
+        {emptyStateMessage ??
+          "マネーフォワードから会計年度を取得できていません。連携を確認し、上の「MFから事業者情報を取得」を押してください。"}
       </p>
     );
   }
