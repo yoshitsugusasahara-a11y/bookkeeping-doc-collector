@@ -198,6 +198,19 @@ export async function createDocumentRule(
     return { status: "error", message: "管理者権限を確認できませんでした。" };
   }
 
+  // フォルダIDは実在と書き込み権限を確認してから保存する。検証しないと、
+  // 存在しないIDでもルールが作れてしまい、資料の分類時にDriveへの保存が
+  // 失敗して初めて分かる（2026-09-09に実際に発生した）。
+  if (driveFolderId && isGoogleDriveConfigured()) {
+    const check = await verifyDriveFolder(driveFolderId);
+    if (check.status !== "ok") {
+      return {
+        status: "error",
+        message: `保存先フォルダIDを確認できませんでした。${describeDriveFolderCheck(check)}`,
+      };
+    }
+  }
+
   const { error } = await supabase.from("document_rules").insert({
     customer_account_id: customerId,
     document_name: documentName,

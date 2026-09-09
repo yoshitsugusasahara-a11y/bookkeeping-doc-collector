@@ -812,7 +812,8 @@ async function classifyAndFileNonReceiptIfNeeded({
   // なお判定やルールが変わっても置き場所とファイル名は変えない（必要なら人が動かす）。
   const keptExistingDriveFile = Boolean(submission.drive_file_id);
   let storedDriveFileName = driveFileName;
-  let uploadedFile: { fileId: string; viewUrl: string };
+  let uploadedFile: { fileId: string; viewUrl: string } | null = null;
+  let driveFailure: string | null = null;
 
   if (keptExistingDriveFile) {
     const fileId = submission.drive_file_id as string;
@@ -848,19 +849,46 @@ async function classifyAndFileNonReceiptIfNeeded({
 
     uploadedFile = { fileId, viewUrl };
   } else {
-    uploadedFile = await uploadFileToDrive({
-      file,
-      folderId,
-      fileName: driveFileName,
-    });
+    // Driveへ保存できなくても分類結果は残す。例外にすると判定ごと巻き戻り、
+    // 資料が「OCR待ち」のまま宙ぶらりんになって理由も画面に出ない。
+    // フォルダは後から削除・移動されうるので、想定すべきケースとして扱う
+    // （2026-09-09、分類ルールの保存先フォルダが存在せず実際に起きた）。
+    try {
+      uploadedFile = await uploadFileToDrive({
+        file,
+        folderId,
+        fileName: driveFileName,
+      });
+    } catch (uploadError) {
+      console.error("Failed to upload the filed document to Drive", uploadError);
+      driveFailure = getErrorMessageForLog(uploadError);
+      await logActivity({
+        supabase,
+        eventType: "drive_upload",
+        status: "error",
+        message: `${submission.file_name} はレシート以外の資料と判定されましたが、Google Driveへ保存できませんでした。${driveFailure}`,
+        customerAccountId: submission.customer_account_id,
+        submissionId: submission.id,
+        source: "upload_background",
+      });
+    }
   }
 
   await supabase
     .from("submissions")
     .update({
-      drive_file_id: uploadedFile.fileId,
-      drive_view_url: uploadedFile.viewUrl,
-      document_drive_file_name: storedDriveFileName,
+      ...(uploadedFile
+        ? {
+            drive_file_id: uploadedFile.fileId,
+            drive_view_url: uploadedFile.viewUrl,
+            document_drive_file_name: storedDriveFileName,
+          }
+        : {}),
+      ...(driveFailure
+        ? {
+            document_error: `Google Driveへ保存できませんでした。${driveFailure} 判定理由: ${classification.reason}`,
+          }
+        : {}),
       ocr_status: "skipped",
       mf_status: "not_ready",
       // レシート以外に仕訳は作らない。読み取り直しで一度作られた予測仕訳が
