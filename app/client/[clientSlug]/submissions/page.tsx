@@ -523,6 +523,11 @@ export default async function ClientSubmissionsPage({
                     isSent={isSent}
                   />
 
+                  {isNonReceipt && (
+                    <small className="muted">
+                      レシート以外と判定された資料のため、仕訳の作成とマネーフォワードへの送信は行いません。
+                    </small>
+                  )}
                   <div className="action-row">
                     <MoneyForwardSendButton
                       clientSlug={clientSlug}

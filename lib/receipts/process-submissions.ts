@@ -574,6 +574,25 @@ export async function rerunOcrForSubmission({
 
   try {
     const file = await downloadStoredFile({ supabase, submission });
+
+    // 分類からやり直す。OCRだけを再実行すると、レシート以外の資料に対しても
+    // 読み取りと仕訳が作られ、「仕訳はあるのに送信できない」状態が生まれる。
+    // 分類ルールや仕訳生成指示を変えたあとに判定をやり直す手段にもなる。
+    const filedAsDocument = await classifyAndFileNonReceiptIfNeeded({
+      supabase,
+      submission,
+      customer,
+      file,
+    });
+
+    if (filedAsDocument) {
+      return {
+        status: "success",
+        message:
+          "レシート以外の資料と判定されました。仕訳は作成していません。",
+      };
+    }
+
     const ocr = await analyzeReceiptWithGemini({
       file,
       mimeType: submission.mime_type,
@@ -740,6 +759,15 @@ async function classifyAndFileNonReceiptIfNeeded({
         mf_status: "not_ready",
         document_error:
           "レシート以外の資料として分類されましたが、保存先Google Driveフォルダが未設定です。",
+        // レシート以外に仕訳は作らない。読み取り直しで一度作られた予測仕訳が
+        // 残っていると「仕訳はあるのに送信できない」画面になるため破棄し、
+        // 理由を画面に出す。
+        mf_journal_preview: null,
+        mf_journal_preview_status: "skipped",
+        mf_journal_preview_error:
+          "レシート以外の資料と判定されたため、仕訳は作成しません。",
+        mf_journal_preview_generated_at: null,
+        mf_error: null,
       })
       .eq("id", submission.id);
     await logActivity({
@@ -763,28 +791,47 @@ async function classifyAndFileNonReceiptIfNeeded({
       })
     : sanitizeDriveFileName(submission.file_name);
 
-  const uploadedFile = await uploadFileToDrive({
-    file,
-    folderId,
-    fileName: driveFileName,
-  });
+  // 既にDriveへ保存済みの資料は作り直さない。読み取り直しで分類が再実行される
+  // ため、そのままだとDrive上に重複が増える。
+  // なお判定やルールが変わっても置き場所とファイル名は変えない（必要なら人が動かす）。
+  const keptExistingDriveFile = Boolean(submission.drive_file_id);
+  const uploadedFile = keptExistingDriveFile
+    ? {
+        fileId: submission.drive_file_id as string,
+        viewUrl:
+          submission.drive_view_url ||
+          `https://drive.google.com/file/d/${submission.drive_file_id}/view`,
+      }
+    : await uploadFileToDrive({
+        file,
+        folderId,
+        fileName: driveFileName,
+      });
 
   await supabase
     .from("submissions")
     .update({
       drive_file_id: uploadedFile.fileId,
       drive_view_url: uploadedFile.viewUrl,
-      document_drive_file_name: driveFileName,
+      document_drive_file_name: keptExistingDriveFile
+        ? submission.document_drive_file_name ?? driveFileName
+        : driveFileName,
       ocr_status: "skipped",
       mf_status: "not_ready",
+      // レシート以外に仕訳は作らない。読み取り直しで一度作られた予測仕訳が
+      // 残っていると「仕訳はあるのに送信できない」画面になるため破棄し、
+      // 理由を画面に出す。
+      mf_journal_preview: null,
+      mf_journal_preview_status: "skipped",
+      mf_journal_preview_error:
+        "レシート以外の資料と判定されたため、仕訳は作成しません。",
+      mf_journal_preview_generated_at: null,
+      mf_error: null,
     })
     .eq("id", submission.id);
 
-  await deleteStoredSource({
-    supabase,
-    submissionId: submission.id,
-    storagePath: submission.source_storage_path,
-  });
+  // 元ファイルは消さない。読み取り直しで分類をやり直すときに必要になる。
+  // 送信済みレシートの元ファイルは従来どおり送信後に削除する。
 
   return true;
 }
