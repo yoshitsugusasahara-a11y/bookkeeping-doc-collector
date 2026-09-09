@@ -9,6 +9,7 @@ import {
   type TaxBreakdown,
 } from "@/lib/gemini/receipt-ocr";
 import {
+  ensureDriveFileInFolder,
   isGoogleDriveConfigured,
   moveDriveFile,
   renameDriveFile,
@@ -445,7 +446,22 @@ async function uploadToDriveIfNeeded({
   file: File;
   ocr: ReceiptOcrResult;
 }) {
-  if (submission.drive_file_id) return submission.drive_file_id;
+  if (submission.drive_file_id) {
+    // 以前レシート以外と判定され、別のフォルダへ保存されていることがある。
+    // レシートとして扱う以上、レシートの保存先フォルダへ移す。
+    // ファイル名は送信時に読み取り結果へ合わせてリネームされる。
+    if (customer.drive_folder_id && isGoogleDriveConfigured()) {
+      try {
+        await ensureDriveFileInFolder({
+          fileId: submission.drive_file_id,
+          folderId: customer.drive_folder_id,
+        });
+      } catch (moveError) {
+        console.error("Failed to move Drive file into the receipt folder", moveError);
+      }
+    }
+    return submission.drive_file_id;
+  }
   if (!customer.drive_folder_id || !isGoogleDriveConfigured()) return null;
 
   const driveFileName = buildReceiptDriveFileName({ submission, ocr });
@@ -795,27 +811,56 @@ async function classifyAndFileNonReceiptIfNeeded({
   // ため、そのままだとDrive上に重複が増える。
   // なお判定やルールが変わっても置き場所とファイル名は変えない（必要なら人が動かす）。
   const keptExistingDriveFile = Boolean(submission.drive_file_id);
-  const uploadedFile = keptExistingDriveFile
-    ? {
-        fileId: submission.drive_file_id as string,
-        viewUrl:
-          submission.drive_view_url ||
-          `https://drive.google.com/file/d/${submission.drive_file_id}/view`,
+  let storedDriveFileName = driveFileName;
+  let uploadedFile: { fileId: string; viewUrl: string };
+
+  if (keptExistingDriveFile) {
+    const fileId = submission.drive_file_id as string;
+    let viewUrl =
+      submission.drive_view_url ||
+      `https://drive.google.com/file/d/${fileId}/view`;
+
+    // 判定やルールが変わると振り分け先とファイル名が変わる。Drive上のファイルも
+    // 追従させる。失敗しても分類自体は完了させ、ログに残して人が直せるようにする。
+    try {
+      const placed = await ensureDriveFileInFolder({ fileId, folderId });
+      viewUrl = placed.viewUrl || viewUrl;
+
+      if (driveFileName !== submission.document_drive_file_name) {
+        const renamed = await renameDriveFile({ fileId, fileName: driveFileName });
+        viewUrl = renamed.viewUrl || viewUrl;
       }
-    : await uploadFileToDrive({
-        file,
-        folderId,
-        fileName: driveFileName,
+    } catch (driveError) {
+      console.error("Failed to relocate the filed document in Drive", driveError);
+      // Drive側が変わっていないので、記録も元のファイル名のままにする。
+      storedDriveFileName =
+        submission.document_drive_file_name ?? driveFileName;
+      await logActivity({
+        supabase,
+        eventType: "drive_move",
+        status: "error",
+        message: `${submission.file_name} の再分類にともなうGoogle Drive上の移動・改名に失敗しました。${getErrorMessageForLog(driveError)}`,
+        customerAccountId: submission.customer_account_id,
+        submissionId: submission.id,
+        source: "upload_background",
       });
+    }
+
+    uploadedFile = { fileId, viewUrl };
+  } else {
+    uploadedFile = await uploadFileToDrive({
+      file,
+      folderId,
+      fileName: driveFileName,
+    });
+  }
 
   await supabase
     .from("submissions")
     .update({
       drive_file_id: uploadedFile.fileId,
       drive_view_url: uploadedFile.viewUrl,
-      document_drive_file_name: keptExistingDriveFile
-        ? submission.document_drive_file_name ?? driveFileName
-        : driveFileName,
+      document_drive_file_name: storedDriveFileName,
       ocr_status: "skipped",
       mf_status: "not_ready",
       // レシート以外に仕訳は作らない。読み取り直しで一度作られた予測仕訳が

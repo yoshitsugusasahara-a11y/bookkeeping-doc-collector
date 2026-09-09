@@ -177,6 +177,49 @@ export async function moveDriveFile({
   };
 }
 
+/**
+ * ファイルが指定フォルダに入っている状態にする。既にそこにあれば何もしない。
+ *
+ * 資料分類をやり直すと振り分け先が変わることがある（ルールが増えた、
+ * レシート以外と判定されていたものがレシートになった、など）。そのとき
+ * Drive上のファイルも追従させるために使う。
+ *
+ * moveDriveFile は現在の親を無条件に付け替えるため、既に目的のフォルダに
+ * ある場合は同じ親を addParents と removeParents の両方に渡すことになる。
+ * それを避けるため、ここでは先に現在の親を確認する。
+ */
+export async function ensureDriveFileInFolder({
+  fileId,
+  folderId,
+}: {
+  fileId: string;
+  folderId: string;
+}): Promise<{ moved: boolean; viewUrl: string | null }> {
+  const drive = createDriveClient();
+
+  const current = await drive.files.get({
+    fileId,
+    fields: "parents, webViewLink",
+    supportsAllDrives: true,
+  });
+
+  const parents = current.data.parents ?? [];
+
+  if (parents.includes(folderId)) {
+    return { moved: false, viewUrl: current.data.webViewLink ?? null };
+  }
+
+  const response = await drive.files.update({
+    fileId,
+    addParents: folderId,
+    removeParents: parents.join(","),
+    fields: "id, webViewLink",
+    supportsAllDrives: true,
+  });
+
+  return { moved: true, viewUrl: response.data.webViewLink ?? null };
+}
+
 export async function renameDriveFile({
   fileId,
   fileName,
