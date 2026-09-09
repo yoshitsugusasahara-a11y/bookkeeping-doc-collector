@@ -18,6 +18,7 @@ import {
 import {
   forceSendJournalOnly,
   processCustomerPendingJournalPreviews,
+  resetFiscalYearBlockedSubmissions,
   processSubmissionToMoneyForward,
   rerunOcrForSubmission,
 } from "@/lib/receipts/process-submissions";
@@ -169,6 +170,37 @@ export async function updateCustomerDriveSettings(
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
   return { status: "success", message: "Drive設定を保存しました。" };
+}
+
+export async function updateCustomerFiscalYear(
+  customerId: string,
+  fiscalYear: number | null,
+): Promise<{ status: "success" | "error"; message?: string }> {
+  if (!customerId) {
+    return { status: "error", message: "顧客情報を取得できませんでした。" };
+  }
+
+  const supabase = await ensureAdmin();
+  if (!supabase) {
+    return { status: "error", message: "管理者権限を確認できませんでした。" };
+  }
+
+  const { error } = await supabase
+    .from("customer_accounts")
+    .update({ mf_fiscal_year: fiscalYear })
+    .eq("id", customerId);
+
+  if (error) {
+    return {
+      status: "error",
+      message: `設定を保存できませんでした。${getErrorMessage(error)}`,
+    };
+  }
+
+  await resetFiscalYearBlockedSubmissions({ supabase, customerId });
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  return { status: "success", message: "送信先の会計年度を保存しました。" };
 }
 
 export type DocumentRuleState = {

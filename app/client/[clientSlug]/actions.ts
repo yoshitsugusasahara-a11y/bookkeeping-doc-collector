@@ -9,6 +9,7 @@ import {
   processCustomerPendingJournalPreviews,
   processSubmissionToMoneyForward,
   rerunOcrForSubmission,
+  resetFiscalYearBlockedSubmissions,
 } from "@/lib/receipts/process-submissions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -57,6 +58,37 @@ async function getApprovedClientAccount(clientSlug: string) {
  * 顧客本人の操作でのみ設定でき、同意した本人と日時を記録する。
  * 管理者からは変更できない。
  */
+export async function updateFiscalYear(
+  clientSlug: string,
+  fiscalYear: number | null,
+): Promise<{ status: "success" | "error"; message?: string }> {
+  const { account } = await getApprovedClientAccount(clientSlug);
+
+  // customer_accounts は顧客のセッションからは更新できない（RLSにより0件更新に
+  // なり、エラーにもならず黙って失敗する）。本人の顧客であることを上で確認済みなので、
+  // 対象を account.id に限定したうえで管理用クライアントで更新する。
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("customer_accounts")
+    .update({ mf_fiscal_year: fiscalYear })
+    .eq("id", account.id)
+    .select("id");
+
+  if (error || !data || data.length === 0) {
+    console.error("Failed to update the fiscal year setting", error);
+    return { status: "error", message: "設定を保存できませんでした。" };
+  }
+
+  await resetFiscalYearBlockedSubmissions({
+    supabase: admin,
+    customerId: account.id,
+  });
+
+  revalidatePath(`/client/${clientSlug}/settings`);
+  revalidatePath(`/client/${clientSlug}/submissions`);
+  return { status: "success", message: "送信先の会計年度を保存しました。" };
+}
+
 export async function updateAutoSendEnabled(
   clientSlug: string,
   enabled: boolean,

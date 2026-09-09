@@ -70,6 +70,12 @@ export async function fetchAndStoreMoneyForwardOffice({
         mf_office_is_manufacturing: toBoolean(office.is_manufacturing),
         mf_office_is_real_estate: toBoolean(office.is_real_estate),
         mf_office_fetched_at: new Date().toISOString(),
+        // 会計期間は仕訳の送信先の年度判定に使う。応答には含まれているのに
+        // 以前は捨てていた。形はMFの応答のまま保存し、読み出し側で正規化する。
+        mf_accounting_periods: Array.isArray(office.accounting_periods)
+          ? office.accounting_periods
+          : null,
+        mf_accounting_periods_fetched_at: new Date().toISOString(),
       })
       .eq("id", customerAccountId);
 

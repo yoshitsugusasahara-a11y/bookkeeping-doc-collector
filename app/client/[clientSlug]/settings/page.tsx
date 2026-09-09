@@ -11,7 +11,12 @@ import {
 } from "lucide-react";
 import { getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
-import { logoutClient } from "../actions";
+import { logoutClient, updateFiscalYear } from "../actions";
+import { FiscalYearForm } from "@/components/fiscal-year-form";
+import {
+  formatAccountingPeriodLabel,
+  parseAccountingPeriods,
+} from "@/lib/moneyforward/fiscal-year";
 import { SendModeForm } from "./send-mode-form";
 
 function formatDateTime(value?: string | null) {
@@ -41,7 +46,7 @@ export default async function ClientSettingsPage({
   const { data: account } = await supabase
     .from("customer_accounts")
     .select(
-      "id, customer_name, approval_status, auto_send_enabled, skip_approval_consented_at",
+      "id, customer_name, approval_status, auto_send_enabled, skip_approval_consented_at, mf_fiscal_year, mf_accounting_periods",
     )
     .eq("user_id", user.id)
     .eq("client_slug", clientSlug)
@@ -54,6 +59,13 @@ export default async function ClientSettingsPage({
   if (account.approval_status !== "approved") {
     redirect(`/client/${clientSlug}/pending`);
   }
+
+  const fiscalYearOptions = parseAccountingPeriods(
+    account.mf_accounting_periods,
+  ).map((period) => ({
+    fiscalYear: period.fiscalYear,
+    label: formatAccountingPeriodLabel(period),
+  }));
 
   const { data: connection } = await supabase
     .from("mf_connections")
@@ -114,6 +126,22 @@ export default async function ClientSettingsPage({
           <span>マネーフォワード連携に失敗しました。時間をおいて再度お試しください。</span>
         </section>
       )}
+
+      <section className="settings-panel">
+        <div>
+          <p className="eyebrow">Fiscal Year</p>
+          <h2>送信先の会計年度</h2>
+          <p className="muted">
+            仕訳を登録する会計年度です。この年度の範囲外の日付の資料は、マネーフォワードへ送信されません。通常は「自動」のままでお使いください。
+          </p>
+        </div>
+        <FiscalYearForm
+          fiscalYear={account.mf_fiscal_year}
+          options={fiscalYearOptions}
+          fetchedAt={null}
+          save={updateFiscalYear.bind(null, clientSlug)}
+        />
+      </section>
 
       <section className="settings-panel">
         <div>

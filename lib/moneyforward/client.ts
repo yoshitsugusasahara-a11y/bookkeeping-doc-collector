@@ -176,6 +176,15 @@ export type MoneyForwardOffice = {
   /** 不動産所得があるか（(不動産)付き科目を使うかの判断材料） */
   is_real_estate?: boolean | null;
   name?: string | null;
+  /**
+   * 会計期間。開始日の降順で返る。仕訳の送信先となる年度の判定に使う。
+   * 過去年度もそのまま含まれる点に注意（[[fiscal-year.ts]] 参照）。
+   */
+  accounting_periods?: Array<{
+    fiscal_year?: number | null;
+    start_date?: string | null;
+    end_date?: string | null;
+  }> | null;
 };
 
 /**

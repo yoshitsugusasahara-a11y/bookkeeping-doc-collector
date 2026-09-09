@@ -11,7 +11,7 @@ import {
 import { ensureProfile, getCurrentUserOrRedirect } from "@/lib/auth/profile";
 import { createClient } from "@/lib/supabase/server";
 import { DeleteSubmissionButton } from "@/components/delete-submission-button";
-import { hideSubmission } from "./actions";
+import { hideSubmission, updateCustomerFiscalYear } from "./actions";
 import { JournalPreviewTable } from "@/components/journal-preview-table";
 import type { MfJournalPreview } from "@/lib/moneyforward/journal-preview";
 import { canAdminSend } from "@/lib/receipts/send-mode";
@@ -23,6 +23,11 @@ import { deleteCustomerAccount } from "../actions";
 import { CustomerAccountActionButton } from "../customer-account-action-button";
 import { CustomerAccountToggleButton } from "../customer-account-toggle-button";
 import { AdminOcrEditForm } from "./admin-ocr-edit-form";
+import { FiscalYearForm } from "@/components/fiscal-year-form";
+import {
+  formatAccountingPeriodLabel,
+  parseAccountingPeriods,
+} from "@/lib/moneyforward/fiscal-year";
 import { AutoSendStatus } from "./auto-send-form";
 import { BusinessProfileForm } from "./business-profile-form";
 import { DisconnectMfButton } from "./disconnect-mf-button";
@@ -219,7 +224,7 @@ export default async function AdminCustomerDetailPage({
     supabase
       .from("customer_accounts")
       .select(
-        "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, irregular_drive_folder_id, irregular_drive_folder_name, journal_prompt, business_description, mf_office_type, mf_office_is_manufacturing, mf_office_is_real_estate, mf_office_fetched_at, suspense_account_id, suspense_account_name, auto_send_enabled, skip_approval_consented_at, submission_retention_limit, created_at",
+        "id, user_id, customer_name, client_slug, approval_status, drive_folder_id, drive_folder_name, error_drive_folder_id, error_drive_folder_name, irregular_drive_folder_id, irregular_drive_folder_name, journal_prompt, business_description, mf_office_type, mf_office_is_manufacturing, mf_office_is_real_estate, mf_office_fetched_at, mf_fiscal_year, mf_accounting_periods, mf_accounting_periods_fetched_at, suspense_account_id, suspense_account_name, auto_send_enabled, skip_approval_consented_at, submission_retention_limit, created_at",
       )
       .eq("id", customerId)
       .maybeSingle(),
@@ -331,6 +336,13 @@ export default async function AdminCustomerDetailPage({
       }),
     )
     .map((item) => item.id);
+
+  const fiscalYearOptions = parseAccountingPeriods(
+    customer.mf_accounting_periods,
+  ).map((period) => ({
+    fiscalYear: period.fiscalYear,
+    label: formatAccountingPeriodLabel(period),
+  }));
 
   const filteredCount =
     (mfFailedOnly
@@ -590,6 +602,24 @@ export default async function AdminCustomerDetailPage({
               isRealEstate={customer.mf_office_is_real_estate}
               officeFetchedAt={customer.mf_office_fetched_at}
               isMfConnected={Boolean(mfConnection)}
+            />
+          </section>
+
+          <section className="settings-panel" aria-label="送信先の会計年度">
+            <div>
+              <p className="eyebrow">Fiscal Year</p>
+              <h2>送信先の会計年度</h2>
+              <p className="muted">
+                仕訳を登録する会計年度です。マネーフォワードは取引日がいずれかの会計期間に含まれていれば受け付けるため、日付の読み取りを誤ると過去の年度へ登録されてしまいます。ここで対象の年度を決め、範囲外の日付の資料は送信しないようにします。
+              </p>
+            </div>
+            <FiscalYearForm
+              fiscalYear={customer.mf_fiscal_year}
+              options={fiscalYearOptions}
+              fetchedAt={formatAdminDateTime(
+                customer.mf_accounting_periods_fetched_at,
+              )}
+              save={updateCustomerFiscalYear.bind(null, customer.id)}
             />
           </section>
 

@@ -165,6 +165,9 @@ alter table public.customer_accounts
   add column if not exists mf_office_is_manufacturing boolean,
   add column if not exists mf_office_is_real_estate boolean,
   add column if not exists mf_office_fetched_at timestamptz,
+  add column if not exists mf_fiscal_year integer,
+  add column if not exists mf_accounting_periods jsonb,
+  add column if not exists mf_accounting_periods_fetched_at timestamptz,
   -- 借方が複数科目に分かれる可能性がある資料の仮計上先（顧客ごとに設定）
   add column if not exists suspense_account_id text,
   add column if not exists suspense_account_name text,

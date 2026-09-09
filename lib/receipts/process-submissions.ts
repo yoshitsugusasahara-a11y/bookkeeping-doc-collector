@@ -32,7 +32,16 @@ import {
   buildVoucherFileName,
   getExtensionFromMimeType,
 } from "@/lib/moneyforward/client";
-import { buildBusinessContextLines } from "@/lib/moneyforward/office";
+import {
+  buildFiscalYearOutOfRangeMessage,
+  isWithinAccountingPeriod,
+  parseAccountingPeriods,
+  resolveTargetAccountingPeriod,
+} from "@/lib/moneyforward/fiscal-year";
+import {
+  buildBusinessContextLines,
+  fetchAndStoreMoneyForwardOffice,
+} from "@/lib/moneyforward/office";
 import { resolveSendMode } from "@/lib/receipts/send-mode";
 import { nonReceiptDocumentKinds } from "@/lib/receipts/submission-filters";
 import type { Database } from "@/lib/supabase/types";
@@ -100,6 +109,9 @@ type CustomerDriveSettings = {
   mf_office_type: string | null;
   mf_office_is_manufacturing: boolean | null;
   mf_office_is_real_estate: boolean | null;
+  /** null は「自動」で、MFの最新の会計期間を送信先にする。 */
+  mf_fiscal_year: number | null;
+  mf_accounting_periods: unknown | null;
 };
 
 /** 顧客設定から、Geminiへ渡す事業者の背景情報を組み立てる。 */
@@ -257,7 +269,7 @@ async function getCustomerDriveSettings({
   const { data: customer, error } = await supabase
     .from("customer_accounts")
     .select(
-      "id, drive_folder_id, error_drive_folder_id, irregular_drive_folder_id, journal_prompt, suspense_account_id, suspense_account_name, business_description, mf_office_type, mf_office_is_manufacturing, mf_office_is_real_estate",
+      "id, drive_folder_id, error_drive_folder_id, irregular_drive_folder_id, journal_prompt, suspense_account_id, suspense_account_name, business_description, mf_office_type, mf_office_is_manufacturing, mf_office_is_real_estate, mf_fiscal_year, mf_accounting_periods",
     )
     .eq("id", customerId)
     .maybeSingle();
@@ -556,6 +568,34 @@ async function runOcrForSubmission({
  *
  * 手修正した読み取り結果も上書きされるため、利用者の明示的な操作からのみ呼ぶこと。
  */
+/**
+ * 送信先の会計年度が原因で止まっていた資料を、再送信の対象へ戻す。
+ *
+ * 会計年度の不一致は恒久エラーに分類しているため、自動では再試行されない。
+ * これは資料ごとの日付を直すまで結果が変わらないので正しいが、**設定側**を
+ * 直した場合は話が別で、そのままだと資料が取り残される。設定を変えたときに
+ * ここで戻す。
+ */
+export async function resetFiscalYearBlockedSubmissions({
+  supabase,
+  customerId,
+}: {
+  supabase: SupabaseClient<Database>;
+  customerId: string;
+}) {
+  const { error } = await supabase
+    .from("submissions")
+    .update({ mf_status: "not_sent", mf_error: null })
+    .eq("customer_account_id", customerId)
+    .eq("mf_status", "failed")
+    // 会計年度に関する文言は自前のものだけ（MFのエラーは英語）。
+    .like("mf_error", "%会計年度%");
+
+  if (error) {
+    console.error("Failed to reset fiscal-year blocked submissions", error);
+  }
+}
+
 export async function rerunOcrForSubmission({
   supabase,
   customerId,
@@ -909,6 +949,83 @@ async function classifyAndFileNonReceiptIfNeeded({
   return true;
 }
 
+/**
+ * 取引日が送信先の会計年度に入っているかを確かめ、範囲外なら例外にする。
+ *
+ * **OCRのあとに呼ぶこと。** OCRの前だと日付が未確定で、読み取った結果が
+ * 過去の日付でもそのまま通ってしまう。
+ *
+ * MFは取引日がいずれかの会計期間に入っていれば受け付けるため、過去年度が
+ * 残っている事業者ではここで止めないと誤登録になる。
+ */
+async function assertTransactionDateWithinFiscalYear({
+  supabase,
+  customerId,
+  customer,
+  submission,
+  ocrDate,
+}: {
+  supabase: SupabaseClient<Database>;
+  customerId: string;
+  customer: CustomerDriveSettings;
+  submission: SubmissionRow;
+  ocrDate: string | null;
+}) {
+  let periods = parseAccountingPeriods(customer.mf_accounting_periods);
+
+  // 未取得ならその場でMFから取り込む。「取れていないから検査できない」という
+  // 抜け穴を残さないため。送信処理はもともとMFと通信しているので負担は小さい。
+  if (periods.length === 0) {
+    await fetchAndStoreMoneyForwardOffice({
+      supabase,
+      customerAccountId: customerId,
+    });
+
+    const { data } = await supabase
+      .from("customer_accounts")
+      .select("mf_accounting_periods")
+      .eq("id", customerId)
+      .maybeSingle();
+
+    periods = parseAccountingPeriods(data?.mf_accounting_periods);
+  }
+
+  if (periods.length === 0) {
+    // 会計期間が取れないときは検査できない。送信自体は止めず、後から
+    // 気づけるようにログへ残す。ここで止めると連携直後に全件が止まる。
+    await logActivity({
+      supabase,
+      eventType: "mf_submit",
+      status: "error",
+      message: `${submission.file_name} の送信時に会計期間を取得できず、送信先の会計年度を確認できませんでした。`,
+      customerAccountId: customerId,
+      submissionId: submission.id,
+      source: null,
+    });
+    return;
+  }
+
+  const period = resolveTargetAccountingPeriod({
+    periods,
+    fiscalYear: customer.mf_fiscal_year,
+  });
+
+  if (!period) {
+    throw new Error(
+      `設定されている送信先の会計年度（${customer.mf_fiscal_year}年度）がマネーフォワードに見つかりません。設定画面で選び直してください。`,
+    );
+  }
+
+  const { date } = resolveTransactionDate({
+    ocrDate,
+    submittedAt: submission.submitted_at,
+  });
+
+  if (!isWithinAccountingPeriod(date, period)) {
+    throw new Error(buildFiscalYearOutOfRangeMessage({ date, period }));
+  }
+}
+
 async function getSubmissionForProcessing({
   supabase,
   submissionId,
@@ -1164,6 +1281,14 @@ export async function forceSendJournalOnly({
   }
 
   try {
+    await assertTransactionDateWithinFiscalYear({
+      supabase,
+      customerId,
+      customer,
+      submission,
+      ocrDate: ocr.date,
+    });
+
     await submitReceiptToMoneyForward({
       supabase,
       customerAccountId: customerId,
@@ -1273,6 +1398,14 @@ export async function processSubmissionToMoneyForward({
       customerJournalPrompt: customer.journal_prompt,
       businessContextLines: getBusinessContextLines(customer),
     });
+    await assertTransactionDateWithinFiscalYear({
+      supabase,
+      customerId,
+      customer,
+      submission,
+      ocrDate: ocr.date,
+    });
+
     const hadExistingDriveFile = Boolean(submission.drive_file_id);
 
     driveFileId = await uploadToDriveIfNeeded({

@@ -49,6 +49,27 @@ const fixOcrDate =
 // 上から順に判定する。範囲の狭いものを先に置くこと。
 const rules: Array<{ pattern: RegExp; explanation: MfErrorExplanation }> = [
   {
+    // 送信前の自前の検査。MFへ投げる前に止めている（lib/moneyforward/fiscal-year.ts）。
+    pattern: /会計年度（.+）の範囲外/,
+    explanation: {
+      kind: "permanent",
+      message: "レシートの取引日が、送信先の会計年度の範囲外です。",
+      action:
+        "読み取り結果の日付をご確認のうえ、修正して再度お試しください。対象外の資料であれば削除してください。送信先の会計年度は設定画面で変更できます。",
+      needsSupport: false,
+    },
+  },
+  {
+    pattern: /送信先の会計年度（.+）がマネーフォワードに見つかりません/,
+    explanation: {
+      kind: "permanent",
+      message:
+        "送信先に設定されている会計年度が、マネーフォワードに見つかりません。",
+      action: "設定画面で送信先の会計年度を選び直してください。",
+      needsSupport: false,
+    },
+  },
+  {
     // 会計期間の外にある日付。読み取り誤りか、そもそも対象外の資料。
     pattern: /not matching any accounting periods/i,
     explanation: {

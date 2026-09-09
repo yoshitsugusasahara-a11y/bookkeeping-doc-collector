@@ -53,6 +53,9 @@ export type Database = {
           mf_office_is_manufacturing: boolean | null;
           mf_office_is_real_estate: boolean | null;
           mf_office_fetched_at: string | null;
+          mf_fiscal_year: number | null;
+          mf_accounting_periods: unknown | null;
+          mf_accounting_periods_fetched_at: string | null;
           suspense_account_id: string | null;
           suspense_account_name: string | null;
           auto_send_enabled: boolean;
@@ -85,6 +88,9 @@ export type Database = {
           mf_office_is_manufacturing?: boolean | null;
           mf_office_is_real_estate?: boolean | null;
           mf_office_fetched_at?: string | null;
+          mf_fiscal_year?: number | null;
+          mf_accounting_periods?: unknown | null;
+          mf_accounting_periods_fetched_at?: string | null;
           suspense_account_id?: string | null;
           suspense_account_name?: string | null;
           auto_send_enabled?: boolean;
@@ -114,6 +120,9 @@ export type Database = {
           mf_office_is_manufacturing?: boolean | null;
           mf_office_is_real_estate?: boolean | null;
           mf_office_fetched_at?: string | null;
+          mf_fiscal_year?: number | null;
+          mf_accounting_periods?: unknown | null;
+          mf_accounting_periods_fetched_at?: string | null;
           suspense_account_id?: string | null;
           suspense_account_name?: string | null;
           auto_send_enabled?: boolean;
