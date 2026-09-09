@@ -33,6 +33,7 @@ import {
 } from "@/lib/moneyforward/client";
 import { buildBusinessContextLines } from "@/lib/moneyforward/office";
 import { resolveSendMode } from "@/lib/receipts/send-mode";
+import { nonReceiptDocumentKinds } from "@/lib/receipts/submission-filters";
 import type { Database } from "@/lib/supabase/types";
 
 const receiptUploadBucket = "receipt_uploads";
@@ -287,6 +288,18 @@ async function getDocumentRules({
   if (error) throw error;
 
   return (data ?? []) as DocumentRule[];
+}
+
+/**
+ * レシート以外と判定された資料か。
+ *
+ * 資料分類でレシート以外になった資料は、Driveへ保存して mf_status を
+ * not_ready に置くだけで、仕訳の対象にしない設計になっている。ところが
+ * 送信処理がこれを見ていなかったため、OCRを走らせて仕訳を作り、MFへ
+ * 送っていた（2026-09-09に御請求書で発覚）。
+ */
+function isNonReceiptSubmission(submission: { document_kind: string | null }) {
+  return nonReceiptDocumentKinds.includes(submission.document_kind ?? "");
 }
 
 async function downloadStoredFile({
@@ -1015,6 +1028,13 @@ export async function forceSendJournalOnly({
     return { status: "skipped", message: "すでにMF送信済みです。" };
   }
 
+  if (isNonReceiptSubmission(submission)) {
+    return {
+      status: "skipped",
+      message: "レシート以外の資料と判定されているため、送信できません。",
+    };
+  }
+
   const ocr = getCompletedOcr(submission);
   if (!ocr) {
     return {
@@ -1103,6 +1123,22 @@ export async function processSubmissionToMoneyForward({
   });
 
   if (submission.mf_status === "sent") {
+    return;
+  }
+
+  // レシート以外は、どの経路から呼ばれても送信しない。この関数はCron・
+  // 管理者の一括処理・顧客の送信ボタン・管理者の個別送信のすべてから
+  // 呼ばれるため、ここで弾くのが唯一の確実な場所になる。
+  if (isNonReceiptSubmission(submission)) {
+    await logActivity({
+      supabase,
+      eventType: "mf_submit",
+      status: "error",
+      message: `${submission.file_name} はレシート以外の資料と判定されているため、マネーフォワードへは送信しません。`,
+      customerAccountId: customerId,
+      submissionId: submission.id,
+      source,
+    });
     return;
   }
 
@@ -1297,7 +1333,9 @@ export async function processCustomerPendingSubmissions({
     .from("submissions")
     .select("id")
     .eq("customer_account_id", customerId)
-    .in("mf_status", ["not_ready", "not_sent"])
+    // not_ready はレシート以外と判定された資料にしか付かない（アップロード時の
+    // 初期値は not_sent）。仕訳の対象ではないので最初から拾わない。
+    .eq("mf_status", "not_sent")
     .not("source_storage_path", "is", null)
     .is("hidden_at", null)
     .order("submitted_at", { ascending: true })

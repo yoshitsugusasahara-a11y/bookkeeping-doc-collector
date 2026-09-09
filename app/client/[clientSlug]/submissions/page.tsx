@@ -362,8 +362,15 @@ export default async function ClientSubmissionsPage({
           const typeLabel = getFileTypeLabel(item.mime_type);
           const tone = getThumbTone(item.mime_type);
           const isSent = item.mf_status === "sent";
+          // レシート以外と判定された資料は仕訳の対象にしないため、
+          // 送信ボタン自体を出さない。
+          const isNonReceipt = nonReceiptDocumentKinds.includes(
+            item.document_kind ?? "",
+          );
           const canSendToMf =
-            item.ocr_status === "completed" && item.mf_status !== "sent";
+            item.ocr_status === "completed" &&
+            item.mf_status !== "sent" &&
+            !isNonReceipt;
           // 生のエラー文言は顧客には出さず、意味の分かる文言に置き換える。
           // 管理者画面では引き続き生の文言を表示する。
           const mfErrorInfo = explainMfError(item.mf_error);

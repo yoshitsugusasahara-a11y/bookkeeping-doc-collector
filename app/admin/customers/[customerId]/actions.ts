@@ -557,7 +557,8 @@ export async function listPendingMfSubmissions(
     .from("submissions")
     .select("id, file_name")
     .eq("customer_account_id", customerId)
-    .neq("mf_status", "sent")
+    // not_ready（レシート以外と判定された資料）は仕訳の対象ではないため含めない。
+    .in("mf_status", ["not_sent", "failed"])
     .not("source_storage_path", "is", null)
     .is("hidden_at", null);
 
