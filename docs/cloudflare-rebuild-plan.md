@@ -2,7 +2,37 @@
 
 2026-09-07作成。現行のVercel+Supabase環境を「検証環境」と位置づけ、Cloudflareスタックで**本番環境を新規構築**するための計画。
 
-**このファイルは新リポジトリへ移す前提の一時的な計画書。** 移設後はそちらが正となる。
+> **このファイルは役目を終えた。2026-09-09に `bookkeeping-doc-collector-cf` リポジトリの
+> `docs/cloudflare-rebuild-plan.md` へ移設済みで、正はそちら。**
+> ここに残しているのは当時の経緯の記録としてのみ。**このファイルを更新しないこと。**
+
+## このリポジトリ側で意識すべきこと（並行開発の取り決め）
+
+**現行環境の開発は止めない。** 別リポジトリなのでgitの衝突は起きず、Cloudflare側はこちらを
+**読むだけ**。加えて最優先の課題（OCRの滞留）は本番顧客に発生中で、待たせる理由がない。
+
+ただし**Cloudflare側へ持ち込むファイルを変更したときだけ**、向こうへ反映漏れが起きうる。
+持ち込み対象は次の範囲。
+
+- `lib/gemini/`（OCR・分類・仕訳生成のプロンプト）
+- `lib/moneyforward/`（APIクライアント・予測仕訳・事業者情報・エラー文言の分類・会計年度）
+- `lib/receipts/send-mode.ts`
+- `lib/images/shrink-image.ts`
+- `docs/`（仕様資料）
+
+**申し送りではなくコミットで管理する。** Cloudflare側は「どの時点のコードを写したか」を
+自分のリポジトリに記録する。写した時点が `<sha>` なら、差分は次で機械的に出せる。
+
+```
+git log <sha>..main -- lib/gemini lib/moneyforward lib/receipts/send-mode.ts lib/images/shrink-image.ts docs
+```
+
+移設時点のコミットは **`be9e8c4166fe9a89173c91cf2e62dee75618febc`**（2026-09-09 19:44）。
+Cloudflare側がフェーズ2-4のコピーを行った実際のコミットに読み替えること。
+
+**`lib/receipts/process-submissions.ts` は持ち込み対象に含まれない。** OCRの処理フローは
+Queues前提で作り直す（フェーズ4-3）ため、こちらでいくら変更しても向こうへ写す必要がない。
+つまり**残作業の大半は反映漏れの心配がない領域**にある。
 
 ---
 
