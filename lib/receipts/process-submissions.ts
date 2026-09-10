@@ -43,7 +43,10 @@ import {
   fetchAndStoreMoneyForwardOffice,
 } from "@/lib/moneyforward/office";
 import { resolveSendMode } from "@/lib/receipts/send-mode";
-import { nonReceiptDocumentKinds } from "@/lib/receipts/submission-filters";
+import {
+  nonReceiptDocumentKinds,
+  receiptOrUnclassifiedFilter,
+} from "@/lib/receipts/submission-filters";
 import type { Database } from "@/lib/supabase/types";
 
 const receiptUploadBucket = "receipt_uploads";
@@ -1207,6 +1210,10 @@ export async function processCustomerPendingJournalPreviews({
     .eq("ocr_status", "completed")
     .neq("mf_status", "sent")
     .in("mf_journal_preview_status", ["pending", "failed"])
+    // レシート以外の資料に仕訳は作らない。画面側でも編集させないようにしたが、
+    // 判定が後からレシート以外へ変わった資料や、過去に completed のまま
+    // 残った資料が漏れるため、拾う側でも弾く。
+    .or(receiptOrUnclassifiedFilter)
     .is("hidden_at", null)
     .order("submitted_at", { ascending: true })
     .limit(limit);

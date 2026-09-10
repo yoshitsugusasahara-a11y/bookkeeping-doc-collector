@@ -456,6 +456,9 @@ export default async function ClientSubmissionsPage({
                     </div>
                   </dl>
 
+                  {isNonReceipt ? (
+                    <p className="muted">レシート以外の資料と判定されているため、読み取り結果は編集できません。判定が誤っている場合は「読み取り直す」を押してください。</p>
+                  ) : (
                   <OcrEditForm
                     clientSlug={clientSlug}
                     submissionId={item.id}
@@ -474,6 +477,7 @@ export default async function ClientSubmissionsPage({
                     ocrAccountReviewReason={item.ocr_account_review_reason}
                     ocrUpdatedAt={item.ocr_updated_at}
                   />
+                  )}
 
                   <dl className="ocr-summary compact-summary">
                     <div>

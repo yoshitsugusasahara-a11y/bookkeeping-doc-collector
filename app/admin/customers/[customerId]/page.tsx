@@ -930,6 +930,11 @@ export default async function AdminCustomerDetailPage({
                         </dd>
                       </div>
                     </dl>
+                    {nonReceiptDocumentKinds.includes(
+                      item.document_kind ?? "",
+                    ) ? (
+                      <p className="muted">レシート以外の資料と判定されているため、読み取り結果は編集できません。判定が誤っている場合は「読み取り直す」を押してください。</p>
+                    ) : (
                     <AdminOcrEditForm
                       customerId={customer.id}
                       submissionId={item.id}
@@ -948,6 +953,7 @@ export default async function AdminCustomerDetailPage({
                       ocrAccountReviewReason={item.ocr_account_review_reason}
                       ocrUpdatedAt={item.ocr_updated_at}
                     />
+                    )}
                     <JournalPreviewTable
                       preview={
                         (item.mf_journal_preview as MfJournalPreview | null) ??
