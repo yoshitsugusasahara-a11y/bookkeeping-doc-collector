@@ -934,6 +934,8 @@ export default async function AdminCustomerDetailPage({
                       item.document_kind ?? "",
                     ) ? (
                       <p className="muted">レシート以外の資料と判定されているため、読み取り結果は編集できません。判定が誤っている場合は「読み取り直す」を押してください。</p>
+                    ) : item.ocr_status === "pending" ? (
+                      <p className="muted">読み取り中です。完了すると内容が表示され、必要に応じて修正できます。</p>
                     ) : (
                     <AdminOcrEditForm
                       customerId={customer.id}

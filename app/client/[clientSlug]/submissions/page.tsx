@@ -458,6 +458,10 @@ export default async function ClientSubmissionsPage({
 
                   {isNonReceipt ? (
                     <p className="muted">レシート以外の資料と判定されているため、読み取り結果は編集できません。判定が誤っている場合は「読み取り直す」を押してください。</p>
+                  ) : item.ocr_status === "pending" ? (
+                    // 読み取り中に手入力を保存させない。あとから来たOCRの結果に
+                    // 上書きされて消えるため（保存は成功したように見える）。
+                    <p className="muted">読み取り中です。完了すると内容が表示され、必要に応じて修正できます。</p>
                   ) : (
                   <OcrEditForm
                     clientSlug={clientSlug}
